@@ -3,6 +3,8 @@ import {
 	dragEdgeIso,
 	fractionToMs,
 	FULL_BOUNDS,
+	INSERT_WINDOW_MS,
+	insertWindowAt,
 	layoutBars,
 	layoutFlags,
 	MAX_ZOOM,
@@ -10,6 +12,7 @@ import {
 	normalizeZoom,
 	rulerLabels,
 	rulerTicks,
+	shiftWindow,
 	steppedZoom,
 	tickIntervalHours,
 	timelineBounds,
@@ -85,6 +88,93 @@ describe("dragEdgeIso", () => {
 		expect(dragEdgeIso("start", 1, FULL_BOUNDS, undefined)).toBe(
 			new Date(TIMELINE_END_MS - 60_000).toISOString(),
 		);
+	});
+});
+
+describe("shiftWindow", () => {
+	const start = "2001-09-11T12:00:00Z";
+	const end = "2001-09-11T13:00:00Z";
+
+	it("moves both bounds by the delta, snapped to the minute, keeping the duration exact", () => {
+		// 90.4 seconds snaps to 2 minutes at the start; the end follows by the
+		// same hour so the window never stretches or squashes mid-drag.
+		expect(shiftWindow(start, end, 90_400)).toEqual({
+			start: "2001-09-11T12:02:00.000Z",
+			end: "2001-09-11T13:02:00.000Z",
+		});
+	});
+
+	it("stops at the timeline bounds instead of pushing an edge outside them", () => {
+		// 9 Sep 00:00 is the track's left edge: a huge leftward delta parks the
+		// window there, still an hour long.
+		expect(shiftWindow(start, end, -1e12)).toEqual({
+			start: new Date(TIMELINE_START_MS).toISOString(),
+			end: new Date(TIMELINE_START_MS + 3_600_000).toISOString(),
+		});
+		expect(shiftWindow(start, end, 1e12)).toEqual({
+			start: new Date(TIMELINE_END_MS - 3_600_000).toISOString(),
+			end: new Date(TIMELINE_END_MS).toISOString(),
+		});
+	});
+
+	it("clamps against a playlist-window's rescaled bounds", () => {
+		const b = timelineBounds("2001-09-11T12:00:00Z", "2001-09-11T14:00:00Z");
+		expect(shiftWindow(start, end, 1e12, b)).toEqual({
+			start: "2001-09-11T13:00:00.000Z",
+			end: "2001-09-11T14:00:00.000Z",
+		});
+	});
+
+	it("shifts only the bound that exists and leaves an unbounded edge unbounded", () => {
+		expect(shiftWindow(start, undefined, 600_000)).toEqual({
+			start: "2001-09-11T12:10:00.000Z",
+			end: undefined,
+		});
+		expect(shiftWindow(undefined, end, -600_000)).toEqual({
+			start: undefined,
+			end: "2001-09-11T12:50:00.000Z",
+		});
+	});
+
+	it("has nothing to move when neither bound exists", () => {
+		expect(shiftWindow(undefined, undefined, 600_000)).toBeNull();
+	});
+});
+
+describe("insertWindowAt", () => {
+	it("opens a 30-minute window starting at the minute under the pointer", () => {
+		// 0.25 of the ten-day span = 11 Sep 12:00.
+		expect(INSERT_WINDOW_MS).toBe(30 * 60_000);
+		expect(insertWindowAt(0.25)).toEqual({
+			start: "2001-09-11T12:00:00.000Z",
+			end: "2001-09-11T12:30:00.000Z",
+		});
+	});
+
+	it("snaps the start to the minute", () => {
+		// 0.25 + 90.4s worth of the span.
+		expect(insertWindowAt(0.25 + 90_400 / (TIMELINE_END_MS - TIMELINE_START_MS)).start).toBe(
+			"2001-09-11T12:02:00.000Z",
+		);
+	});
+
+	it("keeps the whole window inside the bounds when the pointer is near either end", () => {
+		expect(insertWindowAt(1)).toEqual({
+			start: new Date(TIMELINE_END_MS - INSERT_WINDOW_MS).toISOString(),
+			end: new Date(TIMELINE_END_MS).toISOString(),
+		});
+		expect(insertWindowAt(-0.5)).toEqual({
+			start: new Date(TIMELINE_START_MS).toISOString(),
+			end: new Date(TIMELINE_START_MS + INSERT_WINDOW_MS).toISOString(),
+		});
+	});
+
+	it("maps the fraction against a playlist-window's rescaled bounds", () => {
+		const b = timelineBounds("2001-09-11T12:00:00Z", "2001-09-11T14:00:00Z");
+		expect(insertWindowAt(0.5, b)).toEqual({
+			start: "2001-09-11T13:00:00.000Z",
+			end: "2001-09-11T13:30:00.000Z",
+		});
 	});
 });
 

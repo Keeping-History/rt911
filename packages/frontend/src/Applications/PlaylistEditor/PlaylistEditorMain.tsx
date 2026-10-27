@@ -135,6 +135,8 @@ export function PlaylistEditorMain({
 	const mediaEntries = state.entries.filter(
 		(e): e is EditorEntry & { entry: MediaEntry } => e.entry.kind === "media",
 	);
+	// The timeline addresses entries by uid; only media entries have windows.
+	const mediaEntry = (uid: string) => mediaEntries.find((e) => e.uid === uid);
 	const mediaTab = (
 		<div className="playlistMediaSections">
 			{MEDIA_SECTIONS.map(({ key, label, emptyHint, match }) => {
@@ -198,9 +200,37 @@ export function PlaylistEditorMain({
 					selectedUid={state.selectedUid}
 					onSelect={(uid) => dispatch({ type: "select", uid })}
 					onSetEntryBound={(uid, edge, iso) => {
-						const e = state.entries.find((x) => x.uid === uid);
-						if (!e || e.entry.kind !== "media") return;
+						const e = mediaEntry(uid);
+						if (!e) return;
 						dispatch({ type: "updateEntry", uid, entry: { ...e.entry, [edge]: iso } });
+					}}
+					onSetEntryWindow={(uid, start, end) => {
+						const e = mediaEntry(uid);
+						if (!e) return;
+						// Rebuilt without the old bounds so an edge the move left
+						// unbounded is absent, not an `undefined` key that would
+						// read as "set" to anything checking `in`.
+						const { start: _s, end: _e, ...rest } = e.entry;
+						dispatch({
+							type: "updateEntry",
+							uid,
+							entry: { ...rest, ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}) },
+						});
+					}}
+					onInsertEntryWindow={(uid, start, end) => {
+						const e = mediaEntry(uid);
+						if (!e) return;
+						// Another window for the same station/channel: the lane's
+						// media identity, with the right-clicked window and none of
+						// the source entry's other settings (focus is per window).
+						dispatch({
+							type: "addEntries",
+							entries: [{
+								entry: { kind: "media", app: e.entry.app, itemId: e.entry.itemId, start, end },
+								timelineMeta: e.timelineMeta,
+							}],
+							select: true,
+						});
 					}}
 					zoom={zoom}
 					onZoomChange={onZoomChange}

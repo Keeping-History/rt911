@@ -7,6 +7,28 @@ vi.mock("./resolveTimelineMeta", () => ({
 	resolveTimelineMeta: vi.fn(async () => new Map()),
 }));
 
+// The real ClassicyContextualMenu only fires an item after its flash
+// animation ends, which jsdom never raises. The stand-in keeps the menu's
+// contract (items, titles, onClose) and nothing else.
+vi.mock("classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("classicy")>()),
+	ClassicyContextualMenu: ({
+		menuItems,
+	}: {
+		menuItems: { id: string; title?: string; onClickFunc?: () => void }[];
+	}) => (
+		<ul role="menu">
+			{menuItems.map((item) => (
+				<li key={item.id}>
+					<button type="button" role="menuitem" onClick={() => item.onClickFunc?.()}>
+						{item.title}
+					</button>
+				</li>
+			))}
+		</ul>
+	),
+}));
+
 import { barMaskImage, edgeCursor, PlaylistTimeline } from "./PlaylistTimeline";
 import { resolveTimelineMeta } from "./resolveTimelineMeta";
 
@@ -250,7 +272,7 @@ describe("PlaylistTimeline", () => {
 		expect(zoomOut.disabled).toBe(false);
 	});
 
-	describe("edge drag", () => {
+	describe("bar drags", () => {
 		// ABC runs 12:00–13:00 on 11 Sep: startFrac 0.25 of the ten-day span.
 		const dragEntries: EditorEntry[] = [
 			{
@@ -263,8 +285,135 @@ describe("PlaylistTimeline", () => {
 		];
 
 		// jsdom does no layout, so the track measures 0×0 and every drag would
-		// no-op; a mocked 1000px rect makes clientX read directly as frac ‰.
-		function renderWithTrack(onSetEntryBound = vi.fn()) {
+		// no-op; a mocked 1000px rect makes a 100px pointer travel one day.
+		type Props = Parameters<typeof PlaylistTimeline>[0];
+		function renderWithTrack({
+			onSetEntryBound = vi.fn<NonNullable<Props["onSetEntryBound"]>>(),
+			onSetEntryWindow = vi.fn<NonNullable<Props["onSetEntryWindow"]>>(),
+			onSelect = vi.fn<Props["onSelect"]>(),
+			entries = dragEntries,
+		}: {
+			onSetEntryBound?: ReturnType<typeof vi.fn<NonNullable<Props["onSetEntryBound"]>>>;
+			onSetEntryWindow?: ReturnType<typeof vi.fn<NonNullable<Props["onSetEntryWindow"]>>>;
+			onSelect?: ReturnType<typeof vi.fn<Props["onSelect"]>>;
+			entries?: EditorEntry[];
+		} = {}) {
+			render(
+				<PlaylistTimeline
+					entries={entries}
+					selectedUid={null}
+					onSelect={onSelect}
+					onSetEntryBound={onSetEntryBound}
+					onSetEntryWindow={onSetEntryWindow}
+					{...atRest}
+				/>,
+			);
+			vi.spyOn(screen.getByTestId("timeline-track"), "getBoundingClientRect").mockReturnValue({
+				left: 0, width: 1000, top: 0, right: 1000, bottom: 20, height: 20,
+				x: 0, y: 0, toJSON: () => ({}),
+			} as DOMRect);
+			return { onSetEntryBound, onSetEntryWindow, onSelect };
+		}
+
+		const bar = () => document.querySelector(".playlistTimelineBar") as HTMLElement;
+
+		it("renders no handles when onSetEntryBound is not wired (read-only host)", () => {
+			render(
+				<PlaylistTimeline entries={dragEntries} selectedUid={null} onSelect={vi.fn()} {...atRest} />,
+			);
+			expect(document.querySelector(".playlistTimelineBarHandle")).toBeNull();
+		});
+
+		it("previews the dragged end edge by how far the pointer travelled and commits on release", () => {
+			const { onSetEntryBound } = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-end-e1");
+
+			// 100px of a 1000px track is a day: the end goes from 11 Sep 13:00
+			// to 12 Sep 13:00 wherever on the handle the grab started.
+			fireEvent.pointerDown(handle, { clientX: 503, pointerId: 1 });
+			fireEvent.pointerMove(handle, { clientX: 603, pointerId: 1 });
+
+			expect(parseFloat(bar().style.left)).toBeCloseTo(25);
+			expect(parseFloat(bar().style.width)).toBeCloseTo(10.4167, 3);
+			expect(onSetEntryBound).not.toHaveBeenCalled();
+
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			expect(onSetEntryBound).toHaveBeenCalledWith("e1", "end", "2001-09-12T13:00:00.000Z");
+		});
+
+		it("clamps a start-edge drag one minute short of the entry's end bound", () => {
+			const { onSetEntryBound } = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-start-e1");
+			fireEvent.pointerDown(handle, { clientX: 250, pointerId: 1 });
+			fireEvent.pointerMove(handle, { clientX: 990, pointerId: 1 });
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			expect(onSetEntryBound).toHaveBeenCalledWith("e1", "start", "2001-09-11T12:59:00.000Z");
+		});
+
+		it("treats a press that never leaves the dead zone as a click: nothing commits, the bar still selects", () => {
+			// At 1× an hour-long bar is a few pixels wide, so the handles cover
+			// it: a plain click used to land as a zero-travel drag that snapped
+			// the edge to wherever the pointer happened to be.
+			const { onSetEntryBound, onSetEntryWindow, onSelect } = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-start-e1");
+			fireEvent.pointerDown(handle, { clientX: 400, pointerId: 1 });
+			fireEvent.pointerMove(handle, { clientX: 402, pointerId: 1 });
+			expect(bar().style.left).toBe("25%");
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			fireEvent.click(bar());
+			expect(onSetEntryBound).not.toHaveBeenCalled();
+			expect(onSetEntryWindow).not.toHaveBeenCalled();
+			expect(onSelect).toHaveBeenCalledWith("e1");
+		});
+
+		it("abandons the drag without committing on pointercancel", () => {
+			const { onSetEntryBound } = renderWithTrack();
+			const handle = screen.getByTestId("bar-handle-start-e1");
+			fireEvent.pointerDown(handle, { clientX: 100, pointerId: 1 });
+			fireEvent.pointerMove(handle, { clientX: 150, pointerId: 1 });
+			fireEvent.pointerCancel(handle, { pointerId: 1 });
+			fireEvent.pointerUp(handle, { pointerId: 1 });
+			expect(onSetEntryBound).not.toHaveBeenCalled();
+		});
+
+		it("drags the bar body to move the whole window, previewing live and committing both bounds on release", () => {
+			const { onSetEntryWindow, onSetEntryBound, onSelect } = renderWithTrack();
+			fireEvent.pointerDown(bar(), { clientX: 300, pointerId: 1 });
+			fireEvent.pointerMove(bar(), { clientX: 400, pointerId: 1 });
+
+			// A day to the right: 35% in, still an hour (0.4167%) wide.
+			expect(parseFloat(bar().style.left)).toBeCloseTo(35);
+			expect(parseFloat(bar().style.width)).toBeCloseTo(0.4167, 3);
+			expect(onSetEntryWindow).not.toHaveBeenCalled();
+
+			fireEvent.pointerUp(bar(), { pointerId: 1 });
+			expect(onSetEntryWindow).toHaveBeenCalledWith(
+				"e1", "2001-09-12T12:00:00.000Z", "2001-09-12T13:00:00.000Z",
+			);
+			expect(onSetEntryBound).not.toHaveBeenCalled();
+
+			// The click that ends a drag is not a selection click.
+			fireEvent.click(bar());
+			expect(onSelect).not.toHaveBeenCalled();
+		});
+
+		it("moving an entry with one unbounded edge carries only the bound it has", () => {
+			const { onSetEntryWindow } = renderWithTrack({
+				entries: [{
+					uid: "e1",
+					entry: { kind: "media", app: "tv", itemId: "ABC", start: "2001-09-11T12:00:00Z" },
+				}],
+			});
+			fireEvent.pointerDown(bar(), { clientX: 300, pointerId: 1 });
+			fireEvent.pointerMove(bar(), { clientX: 400, pointerId: 1 });
+			// Still fades to the track's end while previewing.
+			expect(bar().style.maskImage).toBe(barMaskImage(false, true));
+			fireEvent.pointerUp(bar(), { pointerId: 1 });
+			expect(onSetEntryWindow).toHaveBeenCalledWith("e1", "2001-09-12T12:00:00.000Z", undefined);
+		});
+
+		it("does not start a move from the bar body when onSetEntryWindow is not wired", () => {
+			const onSetEntryBound = vi.fn();
 			render(
 				<PlaylistTimeline
 					entries={dragEntries}
@@ -278,47 +427,10 @@ describe("PlaylistTimeline", () => {
 				left: 0, width: 1000, top: 0, right: 1000, bottom: 20, height: 20,
 				x: 0, y: 0, toJSON: () => ({}),
 			} as DOMRect);
-			return onSetEntryBound;
-		}
-
-		it("renders no handles when onSetEntryBound is not wired (read-only host)", () => {
-			render(
-				<PlaylistTimeline entries={dragEntries} selectedUid={null} onSelect={vi.fn()} {...atRest} />,
-			);
-			expect(document.querySelector(".playlistTimelineBarHandle")).toBeNull();
-		});
-
-		it("previews the dragged end edge live and commits the snapped ISO only on release", () => {
-			const onSetEntryBound = renderWithTrack();
-			const handle = screen.getByTestId("bar-handle-end-e1");
-
-			// 600/1000 of ten days from 9 Sep = 15 Sep 00:00 exactly.
-			fireEvent.pointerDown(handle, { clientX: 600, pointerId: 1 });
-			fireEvent.pointerMove(handle, { clientX: 600, pointerId: 1 });
-
-			const bar = document.querySelector(".playlistTimelineBar") as HTMLElement;
-			expect(parseFloat(bar.style.left)).toBeCloseTo(25);
-			expect(parseFloat(bar.style.width)).toBeCloseTo(35);
-			expect(onSetEntryBound).not.toHaveBeenCalled();
-
-			fireEvent.pointerUp(handle, { pointerId: 1 });
-			expect(onSetEntryBound).toHaveBeenCalledWith("e1", "end", "2001-09-15T00:00:00.000Z");
-		});
-
-		it("clamps a start-edge drag one minute short of the entry's end bound", () => {
-			const onSetEntryBound = renderWithTrack();
-			const handle = screen.getByTestId("bar-handle-start-e1");
-			fireEvent.pointerDown(handle, { clientX: 990, pointerId: 1 });
-			fireEvent.pointerUp(handle, { pointerId: 1 });
-			expect(onSetEntryBound).toHaveBeenCalledWith("e1", "start", "2001-09-11T12:59:00.000Z");
-		});
-
-		it("abandons the drag without committing on pointercancel", () => {
-			const onSetEntryBound = renderWithTrack();
-			const handle = screen.getByTestId("bar-handle-start-e1");
-			fireEvent.pointerDown(handle, { clientX: 100, pointerId: 1 });
-			fireEvent.pointerCancel(handle, { pointerId: 1 });
-			fireEvent.pointerUp(handle, { pointerId: 1 });
+			fireEvent.pointerDown(bar(), { clientX: 300, pointerId: 1 });
+			fireEvent.pointerMove(bar(), { clientX: 400, pointerId: 1 });
+			expect(bar().style.left).toBe("25%");
+			fireEvent.pointerUp(bar(), { pointerId: 1 });
 			expect(onSetEntryBound).not.toHaveBeenCalled();
 		});
 
@@ -329,6 +441,68 @@ describe("PlaylistTimeline", () => {
 			expect(edgeCursor("lr")).toMatch(/^url\(.+\) 8 8, col-resize$/);
 			expect(edgeCursor("l")).toMatch(/^url\(.+\) 8 8, w-resize$/);
 			expect(edgeCursor("r")).toMatch(/^url\(.+\) 8 8, e-resize$/);
+		});
+	});
+
+	describe("insert menu", () => {
+		const entries: EditorEntry[] = [
+			{
+				uid: "e1",
+				entry: {
+					kind: "media", app: "radio", itemId: "WRC",
+					start: "2001-09-11T19:00:00Z", end: "2001-09-11T20:00:00Z",
+				},
+			},
+		];
+
+		function renderWithTrack(onInsertEntryWindow?: (uid: string, start: string, end: string) => void) {
+			render(
+				<PlaylistTimeline
+					entries={entries}
+					selectedUid={null}
+					onSelect={vi.fn()}
+					onInsertEntryWindow={onInsertEntryWindow}
+					{...atRest}
+				/>,
+			);
+			vi.spyOn(screen.getByTestId("timeline-track"), "getBoundingClientRect").mockReturnValue({
+				left: 0, width: 1000, top: 0, right: 1000, bottom: 20, height: 20,
+				x: 0, y: 0, toJSON: () => ({}),
+			} as DOMRect);
+		}
+
+		const lane = () => document.querySelector(".playlistTimelineLane") as HTMLElement;
+
+		it("right-clicking empty lane space offers a 30-minute window at that time, and choosing it inserts one", () => {
+			const onInsertEntryWindow = vi.fn();
+			renderWithTrack(onInsertEntryWindow);
+
+			// 250/1000 of ten days = 11 Sep 12:00Z, 08:00 on the display clock.
+			const ev = fireEvent.contextMenu(lane(), { clientX: 250, clientY: 40 });
+			expect(ev).toBe(false); // preventDefault: the window's own menu stays quiet
+			const item = screen.getByRole("menuitem", { name: "Insert WRC 08:00–08:30" });
+			fireEvent.click(item);
+			expect(onInsertEntryWindow).toHaveBeenCalledWith(
+				"e1", "2001-09-11T12:00:00.000Z", "2001-09-11T12:30:00.000Z",
+			);
+			expect(screen.queryByRole("menuitem")).toBeNull();
+		});
+
+		it("does nothing on the bar itself, or when the host has not wired inserts", () => {
+			const onInsertEntryWindow = vi.fn();
+			renderWithTrack(onInsertEntryWindow);
+			const onBar = fireEvent.contextMenu(
+				document.querySelector(".playlistTimelineBar") as HTMLElement,
+				{ clientX: 251, clientY: 10 },
+			);
+			expect(onBar).toBe(true);
+			expect(screen.queryByRole("menuitem")).toBeNull();
+
+			cleanup();
+			renderWithTrack(undefined);
+			const onLane = fireEvent.contextMenu(lane(), { clientX: 250, clientY: 40 });
+			expect(onLane).toBe(true);
+			expect(screen.queryByRole("menuitem")).toBeNull();
 		});
 	});
 

@@ -141,6 +141,10 @@ $lane-bar-height: 20px;
 	white-space: nowrap;
 	text-align: left;
 	cursor: pointer;
+	// The body drags the whole window (PlaylistTimeline.tsx): no browser
+	// panning on touch, and no text selection on a wide mouse drag.
+	touch-action: none;
+	user-select: none;
 }
 
 /* The label rides above the bar rather than inside it. `position: sticky`

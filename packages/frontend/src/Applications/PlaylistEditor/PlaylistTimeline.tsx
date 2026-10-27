@@ -1,5 +1,6 @@
-import { ClassicyButton, ClassicyIcons } from "classicy";
+import { ClassicyButton, ClassicyContextualMenu, ClassicyIcons } from "classicy";
 import {
+	type MouseEvent as ReactMouseEvent,
 	type PointerEvent as ReactPointerEvent,
 	useCallback,
 	useEffect,
@@ -13,8 +14,10 @@ import { LanePreview } from "./LanePreview";
 import "./PlaylistEditor.scss";
 import { resolveTimelineMeta } from "./resolveTimelineMeta";
 import {
-	dragEdgeIso,
+	dragPreview,
 	fractionToMs,
+	insertMenuTitle,
+	insertWindowAt,
 	layoutBars,
 	layoutFlags,
 	MAX_ZOOM,
@@ -22,6 +25,7 @@ import {
 	rulerLabels,
 	rulerTicks,
 	steppedZoom,
+	type TimelineBar,
 	timelineBounds,
 	timeToFraction,
 } from "./timelineLayout";
@@ -54,14 +58,42 @@ export function edgeCursor(dir: "l" | "r" | "lr"): string {
 	return `url(${img}) 8 8, ${fallback}`;
 }
 
-type EdgeDrag = {
+// How far the pointer has to travel before a press on a bar becomes a drag.
+// Below this it is a click (select/collapse), so a press that never moves
+// commits nothing — at 1× an hour-long bar is a few pixels wide and its two
+// handles cover all of it, so without a dead zone every click would be a
+// zero-travel edge drag that snapped the edge to wherever the pointer sat.
+// Same threshold as classicy's own file drags.
+const DRAG_DEAD_ZONE_PX = 4;
+
+type BarDrag = {
 	uid: string;
-	edge: "start" | "end";
-	/** The minute-snapped value the drag currently points at — what the bar
-	 * previews, and what commits on release. */
-	iso: string;
-	/** Direction of travel, for the mid-drag cursor; null until first movement. */
+	/** Which part of the bar was grabbed: an edge handle, or the body. */
+	mode: "start" | "end" | "move";
+	/** Pointer x at the press. Drags are relative to it — the grabbed edge or
+	 * window moves by how far the pointer travels, never to where the pointer
+	 * is — so grabbing a handle a few pixels off its edge does not jump it. */
+	originX: number;
+	/** The entry's committed window at the press. */
+	start?: string;
+	end?: string;
+	/** Past the dead zone: the bar previews, and release commits. */
+	active: boolean;
+	/** The minute-snapped window the drag currently points at — what the bar
+	 * previews, and what commits on release. Meaningful once `active`. */
+	previewStart?: string;
+	previewEnd?: string;
+	/** Direction of travel, for the mid-drag edge cursor; null until movement. */
 	dir: "l" | "r" | null;
+};
+
+/** Where a right-click on empty lane space offers to open a new window. */
+type InsertMenu = {
+	uid: string;
+	label: string;
+	position: [number, number];
+	start: string;
+	end: string;
 };
 
 export function barMaskImage(fadeStart: boolean, fadeEnd: boolean): string {
@@ -78,6 +110,8 @@ export function PlaylistTimeline({
 	selectedUid,
 	onSelect,
 	onSetEntryBound,
+	onSetEntryWindow,
+	onInsertEntryWindow,
 	zoom,
 	onZoomChange,
 	start,
@@ -92,6 +126,14 @@ export function PlaylistTimeline({
 	/** Commit an edge drag: set one bound of a media entry's window. Handles
 	 * only render when this is wired, so a read-only host shows plain bars. */
 	onSetEntryBound?: (uid: string, edge: "start" | "end", iso: string) => void;
+	/** Commit a whole-bar drag: both bounds of a media entry's window at once
+	 * (an unbounded edge stays `undefined`). The bar body only drags when this
+	 * is wired. */
+	onSetEntryWindow?: (uid: string, start: string | undefined, end: string | undefined) => void;
+	/** Add another window for the media item a lane belongs to — the lane's
+	 * contextual menu offers one at the right-clicked time. Right-click does
+	 * nothing when this is not wired. */
+	onInsertEntryWindow?: (uid: string, start: string, end: string) => void;
 	/** Controlled: the owning document window holds this in the classicy store
 	 * so the View menu can drive it and it survives closing the window. */
 	zoom: number;
@@ -106,8 +148,12 @@ export function PlaylistTimeline({
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const trackRef = useRef<HTMLDivElement>(null);
 	const anchorRef = useRef<number | null>(null);
-	const [drag, setDrag] = useState<EdgeDrag | null>(null);
+	const [drag, setDrag] = useState<BarDrag | null>(null);
 	const lastDragXRef = useRef(0);
+	// Set when a drag commits, so the click that ends the gesture does not also
+	// toggle the bar's selection. Consumed by the bar's onClick.
+	const suppressClickRef = useRef(false);
+	const [insertMenu, setInsertMenu] = useState<InsertMenu | null>(null);
 	// Everything the lane preview needs to know about what is currently on
 	// screen: how wide the window onto the track is, and where in the track it
 	// sits. All three are read off the same element in one pass so they can
@@ -250,45 +296,113 @@ export function PlaylistTimeline({
 	const ticks = useMemo(() => rulerTicks(zoom, bounds), [zoom, bounds]);
 	const labels = useMemo(() => rulerLabels(zoom, bounds), [zoom, bounds]);
 
-	// Pointer-X → the minute-snapped ISO the dragged edge points at. Null when
-	// the track has no measurable width (jsdom, or a not-yet-laid-out mount).
-	function edgeIsoAt(clientX: number, uid: string, edge: "start" | "end"): string | null {
+	// Pointer travel since the press, in timeline ms. Null when the track has
+	// no measurable width (jsdom, or a not-yet-laid-out mount).
+	function dragDeltaMs(clientX: number, originX: number): number | null {
 		const rect = trackRef.current?.getBoundingClientRect();
 		if (!rect || rect.width === 0) return null;
-		const entry = entries.find((e) => e.uid === uid)?.entry;
-		if (entry?.kind !== "media") return null;
-		const opposite = edge === "start" ? entry.end : entry.start;
-		return dragEdgeIso(edge, (clientX - rect.left) / rect.width, bounds, opposite);
+		return ((clientX - originX) / rect.width) * (bounds.endMs - bounds.startMs);
 	}
 
-	function beginEdgeDrag(e: ReactPointerEvent, uid: string, edge: "start" | "end") {
-		// The handle lives inside the bar's <button>; without this the drag would
-		// also press the button and steal focus mid-gesture.
-		e.preventDefault();
-		e.stopPropagation();
-		const iso = edgeIsoAt(e.clientX, uid, edge);
-		if (!iso) return;
+	function beginDrag(e: ReactPointerEvent, uid: string, mode: BarDrag["mode"]) {
+		const entry = entries.find((x) => x.uid === uid)?.entry;
+		if (entry?.kind !== "media") return;
+		if (mode === "move") {
+			if (!onSetEntryWindow) return;
+			// Nothing to carry: a window with no bounds spans the whole track.
+			if (entry.start === undefined && entry.end === undefined) return;
+		} else {
+			// The handle lives inside the bar's <button>; without this the drag
+			// would also press the button and steal focus mid-gesture — and the
+			// press would bubble up to start a move as well.
+			e.preventDefault();
+			e.stopPropagation();
+		}
+		if (!trackRef.current?.getBoundingClientRect().width) return;
 		// Optional-called: jsdom has no pointer capture. In browsers, capture is
-		// what keeps move/up flowing to the handle once the pointer leaves it.
+		// what keeps move/up flowing to the grabbed element once the pointer
+		// leaves it; handle events then bubble to the bar's handlers below.
 		(e.currentTarget as Element).setPointerCapture?.(e.pointerId);
 		lastDragXRef.current = e.clientX;
-		setDrag({ uid, edge, iso, dir: null });
+		setDrag({
+			uid,
+			mode,
+			originX: e.clientX,
+			start: entry.start,
+			end: entry.end,
+			active: false,
+			dir: null,
+		});
 	}
 
-	function moveEdgeDrag(e: ReactPointerEvent) {
+	function moveDrag(e: ReactPointerEvent) {
 		if (!drag) return;
+		if (!drag.active && Math.abs(e.clientX - drag.originX) < DRAG_DEAD_ZONE_PX) return;
 		const dx = e.clientX - lastDragXRef.current;
 		lastDragXRef.current = e.clientX;
 		// The 1px dead zone keeps sub-pixel jitter from flapping the arrow.
 		const dir = dx > 1 ? "r" : dx < -1 ? "l" : drag.dir;
-		const iso = edgeIsoAt(e.clientX, drag.uid, drag.edge) ?? drag.iso;
-		if (iso !== drag.iso || dir !== drag.dir) setDrag({ ...drag, iso, dir });
+		const delta = dragDeltaMs(e.clientX, drag.originX);
+		const preview = delta === null ? null : dragPreview(drag, delta, bounds);
+		const previewStart = preview ? preview.start : drag.previewStart;
+		const previewEnd = preview ? preview.end : drag.previewEnd;
+		if (
+			!drag.active ||
+			previewStart !== drag.previewStart ||
+			previewEnd !== drag.previewEnd ||
+			dir !== drag.dir
+		) {
+			setDrag({ ...drag, active: true, previewStart, previewEnd, dir });
+		}
 	}
 
-	function endEdgeDrag() {
+	function endDrag() {
 		if (!drag) return;
-		onSetEntryBound?.(drag.uid, drag.edge, drag.iso);
 		setDrag(null);
+		if (!drag.active) return;
+		suppressClickRef.current = true;
+		if (drag.mode === "move") {
+			onSetEntryWindow?.(drag.uid, drag.previewStart, drag.previewEnd);
+			return;
+		}
+		const iso = drag.mode === "start" ? drag.previewStart : drag.previewEnd;
+		if (iso !== undefined) onSetEntryBound?.(drag.uid, drag.mode, iso);
+	}
+
+	function cancelDrag() {
+		if (!drag) return;
+		// A drag that got as far as previewing still ends in a click event,
+		// which must not read as a selection click.
+		if (drag.active) suppressClickRef.current = true;
+		setDrag(null);
+	}
+
+	function clickBar(uid: string) {
+		if (suppressClickRef.current) {
+			suppressClickRef.current = false;
+			return;
+		}
+		onSelect(uid === selectedUid ? null : uid);
+	}
+
+	// Right-click on empty lane space: offer a new window for the lane's media
+	// item at that time. A right-click on the bar itself is left alone, and so
+	// is everything when inserts are not wired (a read-only host) — then the
+	// event is not prevented, so an enclosing window's own menu can still show.
+	function openInsertMenu(e: ReactMouseEvent<HTMLDivElement>, b: TimelineBar) {
+		if (!onInsertEntryWindow) return;
+		if ((e.target as Element).closest(".playlistTimelineBar")) return;
+		const rect = trackRef.current?.getBoundingClientRect();
+		if (!rect || rect.width === 0) return;
+		e.preventDefault();
+		e.stopPropagation();
+		const window_ = insertWindowAt((e.clientX - rect.left) / rect.width, bounds);
+		setInsertMenu({
+			uid: b.uid,
+			label: b.label,
+			position: [e.clientX, e.clientY],
+			...window_,
+		});
 	}
 
 	// While a drag is live the pointer can outrun the 6px handle even under
@@ -296,7 +410,7 @@ export function PlaylistTimeline({
 	// captured element's cursor), so the direction cursor is mirrored onto the
 	// body the same way classicy's own useClassicyCursor does. Keyed on the
 	// direction, not the drag object — the object changes every snapped minute.
-	const dragCursorDir = drag ? (drag.dir ?? "lr") : null;
+	const dragCursorDir = drag && drag.mode !== "move" ? (drag.dir ?? "lr") : null;
 	useEffect(() => {
 		if (!dragCursorDir) return;
 		document.body.style.cursor = edgeCursor(dragCursorDir);
@@ -399,18 +513,21 @@ export function PlaylistTimeline({
 						</div>
 						<div className="playlistTimelineLanes">
 							{bars.map((b) => {
-								// A live drag previews on the bar itself: the dragged edge
-								// tracks the snapped value, and its fade lifts because the
-								// edge is now bound. Everything below reads these instead of
-								// b.* so the actual-span overlay stays proportioned.
-								const dragging = drag?.uid === b.uid ? drag : null;
-								const previewFrac = dragging ? timeToFraction(dragging.iso, bounds) : null;
-								const startFrac = dragging?.edge === "start" ? (previewFrac ?? b.startFrac) : b.startFrac;
-								const endFrac = dragging?.edge === "end" ? (previewFrac ?? b.endFrac) : b.endFrac;
-								const fadeStart = b.fadeStart && dragging?.edge !== "start";
-								const fadeEnd = b.fadeEnd && dragging?.edge !== "end";
+								// A live drag previews on the bar itself: the previewed window
+								// replaces the committed one, and a dragged edge's fade lifts
+								// because it is now bound. Everything below reads these instead
+								// of b.* so the actual-span overlay stays proportioned.
+								const dragging = drag?.uid === b.uid && drag.active ? drag : null;
+								const startFrac = dragging
+									? dragging.previewStart === undefined ? 0 : timeToFraction(dragging.previewStart, bounds)
+									: b.startFrac;
+								const endFrac = dragging
+									? dragging.previewEnd === undefined ? 1 : timeToFraction(dragging.previewEnd, bounds)
+									: b.endFrac;
+								const fadeStart = dragging ? dragging.previewStart === undefined : b.fadeStart;
+								const fadeEnd = dragging ? dragging.previewEnd === undefined : b.fadeEnd;
 								const handleCursor = (edge: "start" | "end") =>
-									edgeCursor(dragging?.edge === edge ? (dragging.dir ?? "lr") : "lr");
+									edgeCursor(dragging?.mode === edge ? (dragging.dir ?? "lr") : "lr");
 								// The TV strip samples the part of the entry that is ON SCREEN,
 								// not its whole span — an entry with no bounds covers all ten
 								// days, and six thumbnails forty hours apart preview nothing.
@@ -429,7 +546,11 @@ export function PlaylistTimeline({
 								const previewStart = Math.max(b.startFrac, visibleFrac?.start ?? 0);
 								const previewEnd = Math.min(b.endFrac, visibleFrac?.end ?? 0);
 								return (
-									<div key={b.uid} className={`playlistTimelineLane playlistTimelineLane-${b.group}`}>
+									<div
+										key={b.uid}
+										className={`playlistTimelineLane playlistTimelineLane-${b.group}`}
+										onContextMenu={(e) => openInsertMenu(e, b)}
+									>
 										<button
 											type="button"
 											className={
@@ -443,7 +564,11 @@ export function PlaylistTimeline({
 												maskImage: barMaskImage(fadeStart, fadeEnd),
 											}}
 											title={b.label}
-											onClick={() => onSelect(b.uid === selectedUid ? null : b.uid)}
+											onClick={() => clickBar(b.uid)}
+											onPointerDown={(e) => beginDrag(e, b.uid, "move")}
+											onPointerMove={moveDrag}
+											onPointerUp={endDrag}
+											onPointerCancel={cancelDrag}
 										>
 											{b.focus === "once" && <span aria-hidden>▸</span>}
 											{b.focus === "locked" && <span aria-hidden>🔒</span>}
@@ -464,10 +589,8 @@ export function PlaylistTimeline({
 														className={`playlistTimelineBarHandle playlistTimelineBarHandle-${edge}`}
 														data-testid={`bar-handle-${edge}-${b.uid}`}
 														style={{ cursor: handleCursor(edge) }}
-														onPointerDown={(e) => beginEdgeDrag(e, b.uid, edge)}
-														onPointerMove={moveEdgeDrag}
-														onPointerUp={endEdgeDrag}
-														onPointerCancel={() => setDrag(null)}
+														// Move/up/cancel bubble to the bar's handlers above.
+														onPointerDown={(e) => beginDrag(e, b.uid, edge)}
 													/>
 												))}
 										</button>
@@ -500,6 +623,23 @@ export function PlaylistTimeline({
 					</div>
 				</div>
 			</div>
+			{insertMenu && onInsertEntryWindow && (
+				<ClassicyContextualMenu
+					name="playlist_timeline_insert"
+					position={insertMenu.position}
+					menuItems={[
+						{
+							id: "playlist_timeline_insert_window",
+							title: insertMenuTitle(insertMenu.label, insertMenu.start, insertMenu.end),
+							onClickFunc: () => {
+								setInsertMenu(null);
+								onInsertEntryWindow(insertMenu.uid, insertMenu.start, insertMenu.end);
+							},
+						},
+					]}
+					onClose={() => setInsertMenu(null)}
+				/>
+			)}
 		</div>
 	);
 }

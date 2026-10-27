@@ -1,5 +1,5 @@
 import { playlistUtcMs } from "../../Providers/Playlist/playlistTypes";
-import type { EditorEntry } from "./editorState";
+import { type EditorEntry, utcIsoToDisplayWallClock } from "./editorState";
 
 export const TIMELINE_START_MS = Date.UTC(2001, 8, 9);
 export const TIMELINE_END_MS = Date.UTC(2001, 8, 19);
@@ -192,7 +192,7 @@ export function dragEdgeIso(
 	opposite?: string,
 ): string {
 	const raw = bounds.startMs + Math.min(1, Math.max(0, frac)) * (bounds.endMs - bounds.startMs);
-	let ms = Math.round(raw / DRAG_SNAP_MS) * DRAG_SNAP_MS;
+	let ms = snapMs(raw);
 	const oppMs = opposite === undefined ? undefined : playlistUtcMs(opposite);
 	if (edge === "start") {
 		ms = Math.min(ms, (oppMs ?? bounds.endMs) - DRAG_SNAP_MS);
@@ -202,6 +202,105 @@ export function dragEdgeIso(
 		ms = Math.min(ms, bounds.endMs);
 	}
 	return new Date(ms).toISOString();
+}
+
+const snapMs = (ms: number): number => Math.round(ms / DRAG_SNAP_MS) * DRAG_SNAP_MS;
+
+/**
+ * Where a whole-bar drag lands: both bounds carried by `deltaMs`, the start
+ * snapped to the minute and the end following it by the window's exact
+ * duration, so a move never changes how long the window is. The delta is
+ * first clamped so no bound leaves the timeline bounds — the window parks
+ * against the edge instead of being pushed past it.
+ *
+ * An unbounded edge stays unbounded: only the bound that exists moves. With
+ * neither bound there is nothing to move, and the result is null so the
+ * caller can leave the entry alone.
+ */
+export function shiftWindow(
+	start: string | undefined,
+	end: string | undefined,
+	deltaMs: number,
+	bounds: TimelineBounds = FULL_BOUNDS,
+): { start: string | undefined; end: string | undefined } | null {
+	const startMs = start === undefined ? undefined : playlistUtcMs(start);
+	const endMs = end === undefined ? undefined : playlistUtcMs(end);
+	if (startMs === undefined && endMs === undefined) return null;
+	let delta = deltaMs;
+	if (startMs !== undefined) delta = Math.max(delta, bounds.startMs - startMs);
+	if (endMs !== undefined) delta = Math.min(delta, bounds.endMs - endMs);
+	if (startMs !== undefined) {
+		const movedStart = snapMs(startMs + delta);
+		return {
+			start: new Date(movedStart).toISOString(),
+			end: endMs === undefined ? undefined : new Date(movedStart + (endMs - startMs)).toISOString(),
+		};
+	}
+	return { start: undefined, end: new Date(snapMs((endMs as number) + delta)).toISOString() };
+}
+
+/** The window a right-click inserts: half an hour, the span of a typical
+ * class segment, which the user then drags or edits to fit. */
+export const INSERT_WINDOW_MS = 30 * 60_000;
+
+/**
+ * A fresh window opening at the minute under track-fraction `frac`, running
+ * {@link INSERT_WINDOW_MS}. Near the end of the track the window slides back so
+ * it still fits; past the start it opens at the start.
+ */
+export function insertWindowAt(
+	frac: number,
+	bounds: TimelineBounds = FULL_BOUNDS,
+	durationMs = INSERT_WINDOW_MS,
+): { start: string; end: string } {
+	const span = bounds.endMs - bounds.startMs;
+	const length = Math.min(durationMs, span);
+	let startMs = snapMs(bounds.startMs + Math.min(1, Math.max(0, frac)) * span);
+	startMs = Math.max(bounds.startMs, Math.min(startMs, bounds.endMs - length));
+	return {
+		start: new Date(startMs).toISOString(),
+		end: new Date(startMs + length).toISOString(),
+	};
+}
+
+/** What a bar drag grabbed: an edge handle or the body, and the entry's
+ * committed window at the press. */
+export type DragGrab = { mode: "start" | "end" | "move"; start?: string; end?: string };
+
+/** The insert item's title, on the display clock the Settings window and
+ * entry rows use (not the ruler's UTC). */
+export function insertMenuTitle(label: string, startIso: string, endIso: string): string {
+	const clock = (iso: string) => {
+		const w = utcIsoToDisplayWallClock(iso);
+		return `${String(w.getHours()).padStart(2, "0")}:${String(w.getMinutes()).padStart(2, "0")}`;
+	};
+	return `Insert ${label} ${clock(startIso)}–${clock(endIso)}`;
+}
+
+/**
+ * The window a drag previews once it is past the dead zone: the grabbed edge
+ * (or both bounds, for a move) carried by `deltaMs` with the same snapping and
+ * clamping the commit will apply. An unbounded edge being dragged starts from
+ * the timeline bound it is drawn at.
+ */
+export function dragPreview(
+	drag: DragGrab,
+	deltaMs: number,
+	bounds: TimelineBounds = FULL_BOUNDS,
+): { start?: string; end?: string } | null {
+	if (drag.mode === "move") return shiftWindow(drag.start, drag.end, deltaMs, bounds);
+	const grabbed = drag.mode === "start" ? drag.start : drag.end;
+	const fromMs =
+		grabbed === undefined
+			? drag.mode === "start" ? bounds.startMs : bounds.endMs
+			: playlistUtcMs(grabbed);
+	const iso = dragEdgeIso(
+		drag.mode,
+		msToFraction(fromMs + deltaMs, bounds),
+		bounds,
+		drag.mode === "start" ? drag.end : drag.start,
+	);
+	return drag.mode === "start" ? { start: iso, end: drag.end } : { start: drag.start, end: iso };
 }
 
 export type TimelineBar = {

@@ -2,6 +2,19 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EditorState } from "./editorState";
 import { PlaylistEditorMain } from "./PlaylistEditorMain";
+import type { PlaylistTimeline } from "./PlaylistTimeline";
+
+// The timeline's own gestures are covered in PlaylistTimeline.test.tsx; here it
+// is a stub exposing its callbacks, so the wiring into the reducer is what
+// gets asserted.
+type TimelineProps = Parameters<typeof PlaylistTimeline>[0];
+let timelineProps: TimelineProps | undefined;
+vi.mock("./PlaylistTimeline", () => ({
+	PlaylistTimeline: (props: TimelineProps) => {
+		timelineProps = props;
+		return <div data-testid="timeline-stub" />;
+	},
+}));
 
 afterEach(cleanup);
 
@@ -160,5 +173,74 @@ describe("PlaylistEditorMain", () => {
 
 		render(<PlaylistEditorMain state={state({ entries, selectedUid: "e1" })} edit={vi.fn()} {...zoomProps} />);
 		expect(screen.queryByLabelText("URL")).toBeNull();
+	});
+
+	describe("timeline edits", () => {
+		const media = {
+			uid: "e1",
+			entry: {
+				kind: "media" as const, app: "radio" as const, itemId: "WRC",
+				start: "2001-09-11T19:00:00Z", end: "2001-09-11T20:00:00Z",
+			},
+			timelineMeta: { publishedAt: null },
+		};
+
+		it("commits a whole-bar move as one updateEntry carrying both bounds", () => {
+			const edit = vi.fn();
+			render(<PlaylistEditorMain state={state({ entries: [media] })} edit={edit} {...zoomProps} />);
+			timelineProps?.onSetEntryWindow?.("e1", "2001-09-11T20:00:00.000Z", "2001-09-11T21:00:00.000Z");
+			expect(edit).toHaveBeenCalledTimes(1);
+			expect(edit).toHaveBeenCalledWith("p1", {
+				type: "updateEntry",
+				uid: "e1",
+				entry: {
+					kind: "media", app: "radio", itemId: "WRC",
+					start: "2001-09-11T20:00:00.000Z", end: "2001-09-11T21:00:00.000Z",
+				},
+			});
+		});
+
+		it("drops a bound the move left unbounded rather than writing an undefined key", () => {
+			const edit = vi.fn();
+			render(<PlaylistEditorMain state={state({ entries: [media] })} edit={edit} {...zoomProps} />);
+			timelineProps?.onSetEntryWindow?.("e1", "2001-09-11T20:00:00.000Z", undefined);
+			const entry = (edit.mock.calls[0][1] as { entry: object }).entry;
+			expect(entry).toEqual({
+				kind: "media", app: "radio", itemId: "WRC", start: "2001-09-11T20:00:00.000Z",
+			});
+			expect("end" in entry).toBe(false);
+		});
+
+		it("inserts a new window as another entry for the same media item, selected for editing", () => {
+			const edit = vi.fn();
+			render(<PlaylistEditorMain state={state({ entries: [media] })} edit={edit} {...zoomProps} />);
+			timelineProps?.onInsertEntryWindow?.("e1", "2001-09-11T21:00:00.000Z", "2001-09-11T21:30:00.000Z");
+			expect(edit).toHaveBeenCalledWith("p1", {
+				type: "addEntries",
+				entries: [{
+					entry: {
+						kind: "media", app: "radio", itemId: "WRC",
+						start: "2001-09-11T21:00:00.000Z", end: "2001-09-11T21:30:00.000Z",
+					},
+					timelineMeta: { publishedAt: null },
+				}],
+				select: true,
+			});
+		});
+
+		it("ignores timeline edits aimed at a uid that is not a media entry", () => {
+			const edit = vi.fn();
+			render(
+				<PlaylistEditorMain
+					state={state({ entries: [{ uid: "j1", entry: { kind: "jump", at: "", to: "" } }] })}
+					edit={edit}
+					{...zoomProps}
+				/>,
+			);
+			timelineProps?.onSetEntryWindow?.("j1", "2001-09-11T20:00:00.000Z", undefined);
+			timelineProps?.onInsertEntryWindow?.("j1", "2001-09-11T21:00:00.000Z", "2001-09-11T21:30:00.000Z");
+			timelineProps?.onSetEntryBound?.("nope", "start", "2001-09-11T21:00:00.000Z");
+			expect(edit).not.toHaveBeenCalled();
+		});
 	});
 });
