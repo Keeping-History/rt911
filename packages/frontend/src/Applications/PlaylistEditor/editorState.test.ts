@@ -291,3 +291,91 @@ describe("expandSelections", () => {
 		warn.mockRestore();
 	});
 });
+
+describe("addTimeWindow", () => {
+	const HOUR = 3_600_000;
+	const base = (entries: object[]) =>
+		initialEditorState({
+			...record,
+			definition: { version: 1, mode: "annotate", entries },
+		});
+
+	it("appends a second window for the same item, selects it, and dirties the document", () => {
+		const s0 = base([
+			{ kind: "media", app: "tv", itemId: "WETA", start: "2001-09-11T12:40:00Z", end: "2001-09-11T13:30:00Z", focus: "once" },
+		]);
+		const s1 = editorReducer(s0, { type: "addTimeWindow", uid: "e1" });
+		expect(s1.entries).toHaveLength(2);
+		expect(s1.entries[1].uid).toBe("e2");
+		expect(s1.entries[1].entry).toEqual({
+			kind: "media", app: "tv", itemId: "WETA", focus: "once",
+			start: "2001-09-11T13:30:00.000Z", end: "2001-09-11T14:30:00.000Z",
+		});
+		expect(s1.selectedUid).toBe("e2");
+		expect(s1.dirty).toBe(true);
+		expect(s1.nextUid).toBe(3);
+		// The original is untouched.
+		expect(s1.entries[0]).toEqual(s0.entries[0]);
+	});
+
+	it("starts the new window after the item's LATEST bound, across every window of that item (case-insensitively)", () => {
+		const s0 = base([
+			{ kind: "media", app: "tv", itemId: "weta", start: "2001-09-11T12:40:00Z", end: "2001-09-11T13:30:00Z" },
+			{ kind: "media", app: "tv", itemId: "WETA", start: "2001-09-11T15:00:00Z", end: "2001-09-11T16:00:00Z" },
+			// A different item on the same app must not move the anchor.
+			{ kind: "media", app: "tv", itemId: "CNN", start: "2001-09-12T12:00:00Z", end: "2001-09-12T13:00:00Z" },
+		]);
+		const s1 = editorReducer(s0, { type: "addTimeWindow", uid: "e1" });
+		expect(s1.entries[3].entry).toMatchObject({
+			itemId: "weta", start: "2001-09-11T16:00:00.000Z", end: "2001-09-11T17:00:00.000Z",
+		});
+	});
+
+	it("anchors on a start-only window's start, and on the timeline's left edge when no window has any bound", () => {
+		const startOnly = base([{ kind: "media", app: "radio", itemId: "wcbs", start: "2001-09-11T12:00:00Z" }]);
+		expect(editorReducer(startOnly, { type: "addTimeWindow", uid: "e1" }).entries[1].entry).toMatchObject({
+			start: "2001-09-11T12:00:00.000Z", end: "2001-09-11T13:00:00.000Z",
+		});
+		const unbounded = base([{ kind: "media", app: "radio", itemId: "wcbs" }]);
+		expect(editorReducer(unbounded, { type: "addTimeWindow", uid: "e1" }).entries[1].entry).toMatchObject({
+			start: "2001-09-09T00:00:00.000Z", end: "2001-09-09T01:00:00.000Z",
+		});
+	});
+
+	it("clamps inside the playlist's own window when one is set, backing up when an hour does not fit", () => {
+		const s0 = initialEditorState({
+			...record,
+			definition: {
+				version: 1, mode: "restrict",
+				start: "2001-09-11T12:00:00Z", end: "2001-09-11T14:30:00Z",
+				entries: [{ kind: "media", app: "tv", itemId: "ABC", start: "2001-09-11T12:00:00Z", end: "2001-09-11T14:00:00Z" }],
+			},
+		});
+		// Bounds round outward to whole hours: 12:00–15:00. Anchor 14:00 + 1h fits exactly.
+		const s1 = editorReducer(s0, { type: "addTimeWindow", uid: "e1" });
+		expect(s1.entries[1].entry).toMatchObject({ start: "2001-09-11T14:00:00.000Z", end: "2001-09-11T15:00:00.000Z" });
+		// Anchor now 15:00 = the right edge: the window backs up to 14:00–15:00.
+		const s2 = editorReducer(s1, { type: "addTimeWindow", uid: "e2" });
+		expect(s2.entries[2].entry).toMatchObject({ start: "2001-09-11T14:00:00.000Z", end: "2001-09-11T15:00:00.000Z" });
+		const third = s2.entries[2].entry as { start: string; end: string };
+		expect(Date.parse(third.end) - Date.parse(third.start)).toBe(HOUR);
+	});
+
+	it("carries the source window's resolved timeline metadata onto the new one", () => {
+		const s0 = editorReducer(base([]), {
+			type: "addEntries",
+			entries: [{
+				entry: { kind: "media", app: "flights", itemId: "AA11" },
+				timelineMeta: { departure: "2001-09-11T11:59:00Z", arrival: "2001-09-11T12:46:00Z" },
+			}],
+		});
+		const s1 = editorReducer(s0, { type: "addTimeWindow", uid: "e1" });
+		expect(s1.entries[1].timelineMeta).toEqual(s0.entries[0].timelineMeta);
+	});
+
+	it("is a no-op for an unknown uid or a non-media entry", () => {
+		const s0 = base([{ kind: "jump", at: "2001-09-11T12:00:00Z", to: "2001-09-11T13:00:00Z" }]);
+		expect(editorReducer(s0, { type: "addTimeWindow", uid: "e1" })).toBe(s0);
+		expect(editorReducer(s0, { type: "addTimeWindow", uid: "nope" })).toBe(s0);
+	});
+});

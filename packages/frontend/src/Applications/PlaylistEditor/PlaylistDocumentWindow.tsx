@@ -190,6 +190,7 @@ export function PlaylistDocumentWindow({
 			// — but this memo runs before the `if (!state) return null` guard
 			// below, so it must not assume `state` is defined).
 			if (!state) return [];
+			const selectedKind = state.entries.find((e) => e.uid === state.selectedUid)?.entry.kind;
 			return [
 				documentFileMenu({
 					dirty: state.dirty,
@@ -224,6 +225,16 @@ export function PlaylistDocumentWindow({
 					mode: state.mode,
 					onSetMode: (mode) => edit(playlistId, { type: "setMode", mode }),
 					addItems: addMenuItems(ADD_ACTIONS, runAdd, runAddSettingsFor),
+					// Only a media entry has a window to add another of. `state` is a
+					// listed dep, and selection changes replace it, so the flag tracks
+					// the selection.
+					canAddTimeWindow: selectedKind === "media",
+					onAddTimeWindow: () => {
+						if (state.selectedUid === null) return;
+						edit(playlistId, { type: "addTimeWindow", uid: state.selectedUid });
+						// Like every Add: the new entry wants editing straight away.
+						openSettingsWindow();
+					},
 				}),
 				documentViewMenu({
 					zoom,

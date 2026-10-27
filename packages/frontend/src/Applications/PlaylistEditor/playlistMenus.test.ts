@@ -76,7 +76,7 @@ describe("documentFileMenu", () => {
 
 describe("documentEditMenu", () => {
 	it("checkmarks the active mode and balloons both", () => {
-		const menu = documentEditMenu({ mode: "restrict", onSetMode: vi.fn(), addItems: [] });
+		const menu = documentEditMenu({ mode: "restrict", onSetMode: vi.fn(), addItems: [], canAddTimeWindow: false, onAddTimeWindow: vi.fn() });
 
 		expect(child(menu, "playlist_edit_restrict").checked).toBe(true);
 		expect(child(menu, "playlist_edit_annotate").checked).toBe(false);
@@ -85,10 +85,11 @@ describe("documentEditMenu", () => {
 	});
 
 	it("separates the modes from Add… with a spacer", () => {
-		const menu = documentEditMenu({ mode: "annotate", onSetMode: vi.fn(), addItems: [] });
+		const menu = documentEditMenu({ mode: "annotate", onSetMode: vi.fn(), addItems: [], canAddTimeWindow: false, onAddTimeWindow: vi.fn() });
 		const ids = menu.menuChildren?.map((c) => c.id);
 		expect(ids).toEqual([
 			"playlist_edit_restrict", "playlist_edit_annotate", "spacer", "playlist_edit_add",
+			"playlist_edit_add_time_window",
 		]);
 	});
 });
@@ -240,5 +241,36 @@ describe("windowMenu", () => {
 		child(menu, "playlist_window_settings").onClickFunc?.();
 
 		expect(onFocusSettings).toHaveBeenCalled();
+	});
+});
+
+describe("documentEditMenu › Add Time Window", () => {
+	const build = (canAddTimeWindow: boolean, onAddTimeWindow = vi.fn()) => {
+		const menu = documentEditMenu({
+			mode: "annotate",
+			onSetMode: vi.fn(),
+			addItems: [],
+			canAddTimeWindow,
+			onAddTimeWindow,
+		});
+		const item = menu.menuChildren?.find((i) => i.id === "playlist_edit_add_time_window");
+		return { item, onAddTimeWindow };
+	};
+
+	it("sits right after Add…, enabled only while a media entry is selected", () => {
+		const { item, onAddTimeWindow } = build(true);
+		expect(item?.title).toBe("Add Time Window");
+		expect(item?.disabled).toBe(false);
+		item?.onClickFunc?.();
+		expect(onAddTimeWindow).toHaveBeenCalledTimes(1);
+		const ids = documentEditMenu({ mode: "annotate", onSetMode: vi.fn(), addItems: [], canAddTimeWindow: true, onAddTimeWindow: vi.fn() })
+			.menuChildren!.map((i) => i.id);
+		expect(ids.indexOf("playlist_edit_add_time_window")).toBe(ids.indexOf("playlist_edit_add") + 1);
+	});
+
+	it("is disabled, with a balloon that says why, when nothing media-shaped is selected", () => {
+		const { item } = build(false);
+		expect(item?.disabled).toBe(true);
+		expect(item?.balloon?.content).toMatch(/select/i);
 	});
 });

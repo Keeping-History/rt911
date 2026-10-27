@@ -606,3 +606,23 @@ describe("PlaylistDocumentWindow", () => {
 		expect(screen.queryByTestId("win-playlist_doc_p1")).toBeNull();
 	});
 });
+
+describe("Edit > Add Time Window", () => {
+	const weta = { uid: "m1", entry: { kind: "media" as const, app: "tv" as const, itemId: "WETA" } };
+
+	it("is disabled until a media entry is selected", () => {
+		renderWindow({ entries: [weta, { uid: "j1", entry: { kind: "jump", at: "", to: "" } }], selectedUid: "j1" });
+		expect(item("edit", "playlist_edit_add_time_window").disabled).toBe(true);
+	});
+
+	it("adds a window to THIS window's playlist for the selected media entry and reveals Settings", () => {
+		renderWindow({ entries: [weta], selectedUid: "m1" });
+		const menuItem = item("edit", "playlist_edit_add_time_window");
+		expect(menuItem.disabled).toBe(false);
+
+		act(() => menuItem.onClickFunc?.());
+
+		expect(editMock).toHaveBeenCalledWith("p1", { type: "addTimeWindow", uid: "m1" });
+		expect(openSettingsWindowMock).toHaveBeenCalled();
+	});
+});

@@ -245,6 +245,39 @@ export function layoutBars(
 	return bars;
 }
 
+/**
+ * One timeline lane: every window of one media item, as separate bars.
+ *
+ * Grouped by app + case-insensitive itemId — the same match the student-side
+ * engine uses, so two entries the engine treats as one item share a lane here
+ * too. Lane order is the bar order {@link layoutBars} already produces (by
+ * group, then first appearance); bars within a lane are sorted by start so
+ * overlapping or out-of-order windows still tab through in time order.
+ */
+export type TimelineLane = {
+	key: string;
+	group: TimelineBar["group"];
+	label: string;
+	bars: TimelineBar[];
+};
+
+export function layoutLanes(
+	entries: EditorEntry[],
+	bounds: TimelineBounds = FULL_BOUNDS,
+): TimelineLane[] {
+	const lanes = new Map<string, TimelineLane>();
+	for (const bar of layoutBars(entries, bounds)) {
+		const key = `${bar.group}:${bar.label.toLowerCase()}`;
+		const lane = lanes.get(key);
+		if (lane) lane.bars.push(bar);
+		else lanes.set(key, { key, group: bar.group, label: bar.label, bars: [bar] });
+	}
+	for (const lane of lanes.values()) {
+		lane.bars.sort((a, b) => a.startFrac - b.startFrac);
+	}
+	return [...lanes.values()];
+}
+
 export function layoutFlags(
 	entries: EditorEntry[],
 	minGapFrac = 0.015,
