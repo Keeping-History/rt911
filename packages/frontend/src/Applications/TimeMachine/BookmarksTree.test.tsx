@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { BookmarksTree, groupByCategory } from "./BookmarksTree";
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	vi.useRealTimers();
+});
 
 const globals = [
 	{ id: 1, title: "AA11 Impact", full_title: null, start_date: "2001-09-11T12:46:00", category: "General" },
@@ -56,5 +59,41 @@ describe("BookmarksTree", () => {
 		render(<BookmarksTree {...base} onJump={onJump} global={globals} personal={[]} signedIn={false} />);
 		fireEvent.click(screen.getByText("AA11 Impact"));
 		expect(onJump).toHaveBeenCalledWith("2001-09-11T12:46:00");
+	});
+});
+
+describe("BookmarksTree balloon help", () => {
+	it("shows a bookmark's full title and the jump time on hover, replacing the native tooltip", () => {
+		vi.useFakeTimers();
+		const withFull = [
+			{ ...globals[0], full_title: "American Airlines Flight 11 strikes the North Tower" },
+		];
+		render(<BookmarksTree {...base} global={withFull} personal={[]} signedIn={false} />);
+
+		const row = screen.getByText("AA11 Impact").closest("button") as HTMLButtonElement;
+		expect(row.getAttribute("title")).toBeNull();
+
+		fireEvent.mouseEnter(row);
+		act(() => {
+			vi.advanceTimersByTime(600);
+		});
+		const tooltip = screen.getByRole("tooltip");
+		expect(tooltip.textContent).toContain("American Airlines Flight 11 strikes the North Tower");
+		expect(tooltip.textContent).toContain("8:46");
+		// The hook binds to the button itself: it is described by the balloon.
+		expect(row.getAttribute("aria-describedby")).toBe(tooltip.id);
+	});
+
+	it("warns that Delete is immediate and cannot be undone", () => {
+		vi.useFakeTimers();
+		render(<BookmarksTree {...base} global={[]} personal={personal} signedIn />);
+
+		fireEvent.mouseEnter(screen.getByRole("button", { name: /Delete “My moment”/i }));
+		act(() => {
+			vi.advanceTimersByTime(600);
+		});
+		const tooltip = screen.getByRole("tooltip");
+		expect(tooltip.textContent).toContain("Delete Bookmark");
+		expect(tooltip.textContent).toContain("cannot be undone");
 	});
 });

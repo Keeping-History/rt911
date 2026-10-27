@@ -1,4 +1,5 @@
 import {
+	ClassicyBalloonHelp,
 	ClassicyButton,
 	ClassicyForm,
 	ClassicyInput,
@@ -27,6 +28,7 @@ export interface BookmarkDialogFormProps {
 }
 
 export const BookmarkDialogForm: React.FC<BookmarkDialogFormProps> = ({
+	mode,
 	initial,
 	tzOffset,
 	saving = false,
@@ -39,6 +41,16 @@ export const BookmarkDialogForm: React.FC<BookmarkDialogFormProps> = ({
 	const [parts, setParts] = useState<LocalTimeParts>(() => utcToLocalParts(baseDate, tzOffset));
 
 	const canSave = title.trim().length > 0 && !saving;
+
+	// A Mac OS 8 balloon explains why a dimmed control is unavailable rather
+	// than describing what it would do, so Save's copy follows canSave.
+	const saveBalloon = saving
+		? "Saving this bookmark now."
+		: title.trim().length === 0
+			? "Not available: give the bookmark a title first."
+			: mode === "edit"
+				? "Save your changes to this bookmark."
+				: "Add this moment to your personal bookmarks, with the title, category and time entered here.";
 
 	const handleSave = () => {
 		if (!canSave) return;
@@ -116,11 +128,25 @@ export const BookmarkDialogForm: React.FC<BookmarkDialogFormProps> = ({
 					onChangeFunc={(e) => setParts((p) => ({ ...p, ampm: e.target.value }))}
 				/>
 			</div>
+			{/* Wrapped, not hook-bound: Save is disabled until there is a title,
+			    and React delivers no mouse events to a disabled button, so the
+			    wrapper is what hears the hover (see balloonButtons.tsx). */}
 			<div className={styles.settingsButtons}>
-				<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
-				<ClassicyButton isDefault={true} buttonType="submit" disabled={!canSave}>
-					Save
-				</ClassicyButton>
+				<ClassicyBalloonHelp
+					title="Cancel"
+					content={
+						mode === "edit"
+							? "Close without changing this bookmark."
+							: "Close without saving a new bookmark."
+					}
+				>
+					<ClassicyButton onClickFunc={onCancel}>Cancel</ClassicyButton>
+				</ClassicyBalloonHelp>
+				<ClassicyBalloonHelp title="Save" content={saveBalloon}>
+					<ClassicyButton isDefault={true} buttonType="submit" disabled={!canSave}>
+						Save
+					</ClassicyButton>
+				</ClassicyBalloonHelp>
 			</div>
 		</ClassicyForm>
 	);

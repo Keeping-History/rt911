@@ -1,7 +1,6 @@
 import {
 	ClassicyApp,
 	ClassicyBalloonHelp,
-	ClassicyBevelButton,
 	ClassicyButton,
 	ClassicyControlGroup,
 	ClassicyIcons,
@@ -19,6 +18,7 @@ import {
 } from "classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
+import { BalloonBevelButton, BalloonClassicyButton } from "./balloonButtons";
 import bookPng from "./book.png";
 import type React from "react";
 import { type ChangeEvent, useCallback, useMemo, useState } from "react";
@@ -39,6 +39,7 @@ import {
 	TIME_MACHINE_APP_ID,
 	timeMachineSetSettings,
 } from "./timeMachineSettings";
+import { type TransportControl, transportBalloons } from "./transportBalloons";
 import { useBookmarks } from "./useBookmarks";
 import { isWindowOpen } from "./windowState";
 
@@ -190,6 +191,10 @@ export const TimeMachine: React.FC = () => {
 		}
 	}, [showBookmarks, desktopEventDispatch]);
 
+	// Menu items are plain data, so their balloon help rides along as the
+	// `balloon` field; the <ClassicyBalloonHelp> wrapper further down is for
+	// JSX controls only. quitMenuItemHelper builds its item without one, so
+	// the help text is layered on by spreading.
 	const appMenu = useMemo(
 		() => [
 			{
@@ -200,13 +205,28 @@ export const TimeMachine: React.FC = () => {
 						id: `${appId}_bookmarks`,
 						title: "Bookmarks\u2026",
 						onClickFunc: openBookmarks,
+						balloon: {
+							title: "Bookmarks",
+							content:
+								"Open the Bookmarks window: key moments of the day, plus any you have saved yourself. Click one to jump the clock to it.",
+						},
 					},
 					{
 						id: `${appId}_settings`,
 						title: "Settings\u2026",
 						onClickFunc: openSettings,
+						balloon: {
+							title: "Settings",
+							content: "Choose how far the Skip, Step and Scrub buttons move the clock.",
+						},
 					},
-					quitMenuItemHelper(appId, appName, appIcon),
+					{
+						...quitMenuItemHelper(appId, appName, appIcon),
+						balloon: {
+							title: "Quit",
+							content: `Close ${appName}. The clock keeps running; open ${appName} again from the desktop to change the time.`,
+						},
+					},
 				],
 			},
 			{
@@ -217,11 +237,19 @@ export const TimeMachine: React.FC = () => {
 						id: `${appId}_show_on_top`,
 						title: (showOnTop ? "✓" : " ") + "Show on Top",
 						onClickFunc: () => setShowOnTop(!showOnTop),
+						balloon: {
+							title: "Show on Top",
+							content: showOnTop
+								? "Time Machine currently stays above every other window. Choose this to let other windows cover it."
+								: "Keep Time Machine above every other window, so the controls are always within reach.",
+						},
 					},
 				],
 			},
 		],
-		[openBookmarks, openSettings],
+		// showOnTop drives both the checkmark and the balloon; without it in
+		// the deps the menu kept showing the stale mark after a toggle.
+		[openBookmarks, openSettings, showOnTop],
 	);
 
 	const { dateTime, setDateTime, tzOffset, paused, pause, resume } = useClassicyDateTime({ tick: true });
@@ -340,6 +368,28 @@ export const TimeMachine: React.FC = () => {
 	const handleSkipForward = () => shiftTime(skipMinutes);
 	const handlePlay        = () => { resume();  trackPauseResume("resume", dateTime); };
 	const handlePause       = () => { pause();   trackPauseResume("pause",  dateTime); };
+
+	// Balloon help for the transport row quotes the live Settings distances
+	// (see transportBalloons.ts), so it is rebuilt whenever they or the
+	// paused state change. The row itself is data so each button gets its
+	// balloon from the same table by key.
+	const balloons = transportBalloons({ skipMinutes, stepSeconds, scrubSeconds, paused });
+	const transportRow: Array<{
+		key: TransportControl;
+		label: string;
+		onClick: () => void;
+		square?: boolean;
+		disabled?: boolean;
+	}> = [
+		{ key: "skipBack", label: "⇚", onClick: handleSkipBack, square: true },
+		{ key: "stepBack", label: "«", onClick: handleStepBack, square: true },
+		{ key: "scrubBack", label: "‹", onClick: handleScrubBack, square: true },
+		{ key: "play", label: "Play", onClick: handlePlay, disabled: !paused },
+		{ key: "pause", label: "Pause", onClick: handlePause, disabled: paused },
+		{ key: "scrubForward", label: "›", onClick: handleScrubForward, square: true },
+		{ key: "stepForward", label: "»", onClick: handleStepForward, square: true },
+		{ key: "skipForward", label: "⇛", onClick: handleSkipForward, square: true },
+	];
 
 	// --- Time entry ---
 
@@ -475,12 +525,22 @@ export const TimeMachine: React.FC = () => {
 							})()}
 						</ClassicyControlGroup>
 						<div className={styles.settingsButtons}>
-							<ClassicyButton onClickFunc={closeSettings}>
-								Cancel
-							</ClassicyButton>
-							<ClassicyButton isDefault={true} onClickFunc={saveSettings}>
-								Save
-							</ClassicyButton>
+							<ClassicyBalloonHelp
+								title="Cancel"
+								content="Close Settings and keep the Skip, Step and Scrub distances you had before."
+							>
+								<ClassicyButton onClickFunc={closeSettings}>
+									Cancel
+								</ClassicyButton>
+							</ClassicyBalloonHelp>
+							<ClassicyBalloonHelp
+								title="Save"
+								content="Use these Skip, Step and Scrub distances from now on and close Settings. They are remembered the next time you visit."
+							>
+								<ClassicyButton isDefault={true} onClickFunc={saveSettings}>
+									Save
+								</ClassicyButton>
+							</ClassicyBalloonHelp>
 						</div>
 					</div>
 				</ClassicyWindow>
@@ -555,29 +615,59 @@ export const TimeMachine: React.FC = () => {
 				<div className={styles.controls}>
 					{/* Transport row */}
 					<div className={styles.transport}>
-						<ClassicyButton buttonShape="square" onClickFunc={handleSkipBack}>⇚</ClassicyButton>
-						<ClassicyButton buttonShape="square" onClickFunc={handleStepBack}>«</ClassicyButton>
-						<ClassicyButton buttonShape="square" onClickFunc={handleScrubBack}>‹</ClassicyButton>
-						<ClassicyButton onClickFunc={handlePlay}  disabled={!paused}>Play</ClassicyButton>
-						<ClassicyButton onClickFunc={handlePause} disabled={paused}>Pause</ClassicyButton>
-						<ClassicyButton buttonShape="square" onClickFunc={handleScrubForward}>›</ClassicyButton>
-						<ClassicyButton buttonShape="square" onClickFunc={handleStepForward}>»</ClassicyButton>
-						<ClassicyButton buttonShape="square" onClickFunc={handleSkipForward}>⇛</ClassicyButton>
+						{transportRow.map(({ key, label, onClick, square, disabled }) =>
+							square ? (
+								// Hook-bound, not wrapped: the six square buttons only fit
+								// this 380px window because they shrink as direct flex
+								// items of the row (see balloonButtons.tsx). Their labels
+								// are arrows, so the balloon title doubles as the
+								// accessible name.
+								<BalloonClassicyButton
+									key={key}
+									balloon={balloons[key]}
+									buttonShape="square"
+									aria-label={balloons[key].title}
+									onClickFunc={onClick}
+								>
+									{label}
+								</BalloonClassicyButton>
+							) : (
+								// Play and Pause take turns being disabled, and React
+								// delivers no mouse events to a disabled button — the
+								// wrapper hears the hover instead. Rectangular buttons
+								// have a min-width and never shrink, so the wrapper
+								// costs nothing here.
+								<ClassicyBalloonHelp
+									key={key}
+									title={balloons[key].title}
+									content={balloons[key].content}
+								>
+									<ClassicyButton onClickFunc={onClick} disabled={disabled}>
+										{label}
+									</ClassicyButton>
+								</ClassicyBalloonHelp>
+							),
+						)}
 					</div>
 
 					<hr className={styles.divider} />
 
 					{/* Time entry row */}
 					<div className={styles.timeEntry}>
-						<ClassicyBevelButton
+						<BalloonBevelButton
+							balloon={{
+								title: "Capture Bookmark",
+								content: signedIn
+									? "Save this exact moment as a personal bookmark, so you can jump straight back to it later."
+									: "Save this moment as a personal bookmark. Personal bookmarks need you to be signed in, so for now this opens the Bookmarks window instead.",
+							}}
 							aria-label="Capture Bookmark"
 							square={true}
-							title="Capture Bookmark"
 							onClickFunc={openCaptureDialog}
 							style={{ minHeight: "var(--hig-button-height)" }}
 						>
 							<img className={styles.captureIcon} src={bookPng} alt="" />
-						</ClassicyBevelButton>
+						</BalloonBevelButton>
 						<ClassicySpinner
 							id="pager-filter-retention"
 							labelTitle="H"
@@ -621,7 +711,12 @@ export const TimeMachine: React.FC = () => {
 							selected={timeForm.ampm}
 							onChangeFunc={(e) => setTimeForm((f) => ({ ...f, ampm: e.target.value }))}
 							/>
-						<ClassicyButton onClickFunc={handleGo}>GO</ClassicyButton>
+						<ClassicyBalloonHelp
+							title="Go"
+							content="Set the clock to the hour, minute, second and AM/PM entered here, on the day the clock is already showing."
+						>
+							<ClassicyButton onClickFunc={handleGo}>GO</ClassicyButton>
+						</ClassicyBalloonHelp>
 					</div>
 				</div>
 			</ClassicyWindow>
