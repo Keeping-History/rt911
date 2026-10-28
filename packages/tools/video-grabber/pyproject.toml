@@ -10,6 +10,9 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.13",
     "sqlalchemy>=2.0",
+    # The only DBAPI installed; every sync URL is rewritten to name it
+    # (video_grabber/db/url.py) because SQLAlchemy 2.1 defaults bare
+    # postgresql:// to psycopg 3.
     "psycopg2-binary>=2.9",
 "httpx>=0.27",
     "boto3>=1.36",

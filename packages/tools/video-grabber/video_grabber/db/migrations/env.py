@@ -3,20 +3,20 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
+from video_grabber.db.url import sync_db_url
+
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override sqlalchemy.url from env if set. The DATABASE_URL Secret is often
-# provisioned with the postgresql+asyncpg:// scheme to satisfy Prefect's
-# server, but Alembic runs synchronously and would raise MissingGreenlet
-# against asyncpg — rewrite to psycopg2 first.
+# Override sqlalchemy.url from env if set, pinned to the sync psycopg2 driver
+# the same way the app pins it (asyncpg would raise MissingGreenlet here, and a
+# bare postgresql:// would let SQLAlchemy 2.1 pick psycopg 3, which is not
+# installed) — see video_grabber/db/url.py.
 db_url = os.getenv("DATABASE_URL")
 if db_url:
-    if db_url.startswith("postgresql+asyncpg://"):
-        db_url = "postgresql+psycopg2://" + db_url[len("postgresql+asyncpg://"):]
-    config.set_main_option("sqlalchemy.url", db_url)
+    config.set_main_option("sqlalchemy.url", sync_db_url(db_url))
 
 target_metadata = None
 

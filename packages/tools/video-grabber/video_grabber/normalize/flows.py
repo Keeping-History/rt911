@@ -29,10 +29,9 @@ from video_grabber.directus.writer import _WASABI_BASE
 from video_grabber.normalize.analysis import archive_key_for, needs_normalization
 from video_grabber.normalize.purge import purge_urls
 from video_grabber.storage import wasabi
+from video_grabber.db.url import sync_db_url
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
-_ASYNCPG_PREFIX = "postgresql+asyncpg://"
-_PSYCOPG2_PREFIX = "postgresql+psycopg2://"
 _DEFAULT_CACHE_CONTROL = "max-age=31536000"
 # A row untouched this long in an in-flight stage has no live worker. Well above
 # the slowest observed item (~3 min for an hour-long mp3 analysis, more for a
@@ -40,10 +39,9 @@ _DEFAULT_CACHE_CONTROL = "max-age=31536000"
 _STALE_MINUTES = 30
 
 
-def _sync_db_url(url: str) -> str:
-    if url.startswith(_ASYNCPG_PREFIX):
-        return _PSYCOPG2_PREFIX + url[len(_ASYNCPG_PREFIX):]
-    return url
+# One shared rewrite (asyncpg → psycopg2, and a bare postgresql:// → psycopg2 so
+# SQLAlchemy's default DBAPI never decides for us); see video_grabber/db/url.py.
+_sync_db_url = sync_db_url
 
 
 _engine: sa.Engine | None = None

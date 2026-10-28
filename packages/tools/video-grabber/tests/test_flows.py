@@ -15,10 +15,12 @@ def test_sync_db_url_rewrites_asyncpg_to_psycopg2():
     assert rewritten == "postgresql+psycopg2://u:p@h:5432/db"
 
 
-def test_sync_db_url_passes_through_plain_postgresql():
+def test_sync_db_url_names_the_driver_on_plain_postgresql():
+    # A bare postgresql:// left SQLAlchemy to pick the DBAPI, and 2.1 picks
+    # psycopg (3), which is not installed. See tests/test_db_url.py.
     from video_grabber.pipeline.flows import _sync_db_url
 
-    assert _sync_db_url("postgresql://u:p@h/db") == "postgresql://u:p@h/db"
+    assert _sync_db_url("postgresql://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
 
 
 def test_sync_db_url_passes_through_explicit_psycopg2():
