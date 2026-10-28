@@ -147,6 +147,8 @@ $lane-bar-height: 20px;
  * its lane-mates so an overlapping window can still be grabbed and dragged. */
 .playlistTimelineBarSelected {
 	z-index: 1;
+	background-color: var(--color-theme-04);
+	color: var(--color-theme-02);
 }
 
 /* The label rides above the bar rather than inside it. `position: sticky`
