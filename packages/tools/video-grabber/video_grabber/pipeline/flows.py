@@ -32,22 +32,15 @@ from video_grabber.epg.scheduler import build_schedule
 from video_grabber.config import Config
 
 from video_grabber.ia.search import IASearch
+from video_grabber.db.url import sync_db_url
 
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
 
 
-_ASYNCPG_PREFIX = "postgresql+asyncpg://"
-_PSYCOPG2_PREFIX = "postgresql+psycopg2://"
-
-
-def _sync_db_url(url: str) -> str:
-    """Force a sync psycopg2 driver. The shared Secret often uses the asyncpg
-    scheme (Prefect's own server requires it), which raises MissingGreenlet
-    inside sync flow code."""
-    if url.startswith(_ASYNCPG_PREFIX):
-        return _PSYCOPG2_PREFIX + url[len(_ASYNCPG_PREFIX):]
-    return url
+# One shared rewrite (asyncpg → psycopg2, and a bare postgresql:// → psycopg2 so
+# SQLAlchemy's default DBAPI never decides for us); see video_grabber/db/url.py.
+_sync_db_url = sync_db_url
 
 
 def get_db():

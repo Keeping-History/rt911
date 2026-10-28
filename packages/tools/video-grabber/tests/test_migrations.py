@@ -8,11 +8,15 @@ import sqlalchemy as sa
 from alembic.config import Config as AlembicConfig
 from alembic import command
 
+from video_grabber.db.url import sync_db_url
 
-TEST_DB_URL = os.getenv(
+
+# Pinned to psycopg2 the same way the app pins it; the bare scheme CI hands us
+# would make SQLAlchemy 2.1 look for psycopg (3) instead.
+TEST_DB_URL = sync_db_url(os.getenv(
     "TEST_DATABASE_URL",
     "postgresql://postgres:postgres@localhost:5432/video_grabber_test",
-)
+))
 
 
 @pytest.fixture(scope="module")

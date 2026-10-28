@@ -47,16 +47,12 @@ from video_grabber.transcribe.srt import (
 )
 from video_grabber.transcribe.whisper import transcribe_wav
 from video_grabber.version import code_version
+from video_grabber.db.url import sync_db_url
 
 _SCRATCH = Path(os.getenv("SCRATCH_DIR", "/tmp/vg-scratch"))
-_ASYNCPG_PREFIX = "postgresql+asyncpg://"
-_PSYCOPG2_PREFIX = "postgresql+psycopg2://"
-
-
-def _sync_db_url(url: str) -> str:
-    if url.startswith(_ASYNCPG_PREFIX):
-        return _PSYCOPG2_PREFIX + url[len(_ASYNCPG_PREFIX):]
-    return url
+# One shared rewrite (asyncpg → psycopg2, and a bare postgresql:// → psycopg2 so
+# SQLAlchemy's default DBAPI never decides for us); see video_grabber/db/url.py.
+_sync_db_url = sync_db_url
 
 
 def get_db():

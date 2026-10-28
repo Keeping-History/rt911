@@ -199,7 +199,8 @@ def test_transition_job_failed_with_error_message_persists(connection, engine, m
 
 def test_sync_db_url_keeps_test_database_url_compatible():
     """The TEST_DATABASE_URL in CI uses postgresql:// (no driver suffix);
-    _sync_db_url should leave it untouched and the engine should connect."""
+    _sync_db_url must pin it to psycopg2 and the engine must connect — under
+    SQLAlchemy 2.1 the bare scheme would otherwise select psycopg (3)."""
     url = _sync_db_url(os.environ["TEST_DATABASE_URL"])
     eng = sa.create_engine(url)
     with eng.connect() as c:
