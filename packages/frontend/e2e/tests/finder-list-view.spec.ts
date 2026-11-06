@@ -27,7 +27,9 @@ test("Finder list view rows select and disclose on click", async ({ page }) => {
 	const applications = page.locator('tr[data-row-id="Macintosh HD:Applications"]');
 	await applications.getByText("Applications").click();
 	await expect(applications).toHaveAttribute("data-selected", "true");
-	await expect(applications).toHaveClass(/classicyFileBrowserViewTableRowSelected/);
+	// Classicy 3 states are bare classes beside the root class.
+	await expect(applications).toHaveClass(/\bclassicyFileBrowserViewTableRow\b/);
+	await expect(applications).toHaveClass(/(^|\s)selected(\s|$)/);
 
 	// The disclosure triangle expands the folder in place (and, because the
 	// triangle swallows the click, without doubling as a row selection).
