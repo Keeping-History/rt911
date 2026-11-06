@@ -1,7 +1,12 @@
 #!/bin/sh
 export PATH="$HOME/.local/share/mise/shims:$PATH"
-pnpm update classicy --latest --recursive --silent
-# classicy is pinned to an exact version (not "latest"), so --latest rewrites
-# packages/frontend/package.json's pin in addition to the lockfile — stage both,
-# or the bump silently reverts on the next non-frozen `pnpm install`.
+# Classicy ships as two packages released in lockstep: the core
+# (@classicy/classicy) and the Platinum look (@classicy/appearance-platinum,
+# whose peer range is ^<core version>). Bump them together, with the same
+# command the bump-classicy workflow runs, or one would leave the other's peer
+# range behind.
+pnpm bump:classicy
+# --latest rewrites packages/frontend/package.json's ranges in addition to the
+# lockfile — stage both, or the bump silently reverts on the next non-frozen
+# `pnpm install`.
 git add pnpm-lock.yaml packages/frontend/package.json

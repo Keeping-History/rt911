@@ -7,7 +7,7 @@ packages:
 # root, whatever directory pnpm is invoked from.
 storeDir: .pnpm-store
 # Installs resolve fresh rather than trusting the lockfile — the husky
-# pre-commit hook bumps `classicy` on every commit, so the lockfile is
+# pre-commit hook bumps Classicy on every commit, so the lockfile is
 # routinely one step behind package.json by design. CI passes
 # --frozen-lockfile explicitly and is unaffected.
 preferFrozenLockfile: false
@@ -21,16 +21,18 @@ overrides:
 # pnpm 11 refuses any package published within minimumReleaseAge (24h by
 # default) — a supply-chain delay that is worth keeping. Two exemptions:
 #
-# classicy is pinned to "latest" and .husky/pre-commit bumps it on EVERY
-# commit, so a same-day publish would fail the hook for everyone until it
-# aged out. Excluding it is the difference between the gate protecting the
-# tree and the gate blocking it.
+# Classicy (@classicy/classicy and @classicy/appearance-platinum, published
+# together) is bumped to "latest" by .husky/pre-commit on EVERY commit, so a
+# same-day publish would fail the hook for everyone until it aged out.
+# Excluding both is the difference between the gate protecting the tree and
+# the gate blocking it.
 #
 # oxlint is exempt because it publishes 20 per-platform binding packages in
 # lockstep; without this, a lint upgrade lands as 20 hand-maintained
 # version-pinned exclusions that go stale the moment the version moves.
 minimumReleaseAgeExclude:
-  - classicy
+  - '@classicy/classicy'
+  - '@classicy/appearance-platinum'
   - oxlint
   - '@oxlint/*'
 # pnpm 11 replaced onlyBuiltDependencies with this per-package map; the
