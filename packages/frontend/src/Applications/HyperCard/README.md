@@ -1,6 +1,6 @@
 # HyperCard extensions
 
-The **HyperCard app itself ships with `classicy`** and is auto-mounted by
+The **HyperCard app itself ships with `@classicy/classicy`** and is auto-mounted by
 `ClassicyDesktop` (it can only be turned off via the
 `ClassicyDefaultAppsContext` `disableHyperCard` flag). Per the frontend
 `CLAUDE.md`, this repo never re-implements a bundled system app — it only
