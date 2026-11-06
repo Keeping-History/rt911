@@ -5,7 +5,12 @@
 // shell component (Desktop or IpodShell), which preserves the invariant
 // documented in DesktopRoot.tsx — ClassicyDesktop must never mount a tick
 // after ClassicyAppManagerProvider.
-import "classicy/dist/classicy.css";
+//
+// Classicy 3 draws nothing until an Appearance Package registers (it shows its
+// "No Appearance Package is loaded" screen instead), so the Platinum package
+// is imported first, before anything renders. Importing @classicy/classicy
+// injects its own stylesheet, so there is no CSS import here any more.
+import "@classicy/appearance-platinum";
 import type { ReactNode } from "react";
 import { ClassicyAppManagerProvider, registerClassicyFileSystemAdapter } from "@classicy/classicy";
 import { DefaultFileSystem } from "../data/DefaultFileSystem";

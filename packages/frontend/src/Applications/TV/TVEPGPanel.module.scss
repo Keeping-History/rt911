@@ -1,4 +1,4 @@
-@use 'classicy/scss/appearance';
+@use '@classicy/appearance-platinum/scss/mixins';
 
 .epgChannel {
   font-family: var(--body-font), serif;
@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   height: calc(var(--window-control-size) * 3);
-  @include appearance.platinumWindowUndepressable;
+  @include mixins.platinum-window-undepressable;
   padding: var(--window-padding-size);
   border: 0;
   border-radius: 0 !important;
@@ -17,7 +17,7 @@
   font-size: calc(var(--ui-font-size) * 0.85);
   display: flex;
   align-items: center;
-  @include appearance.platinumWindowUndepressable;
+  @include mixins.platinum-window-undepressable;
   flex-direction: row;
   height: calc(var(--window-control-size) * 3);
   padding: var(--window-padding-size);
@@ -111,7 +111,7 @@
 }
 
 .epgEntry.selected {
-  @include appearance.platinumWindowDepressed;
+  @include mixins.platinum-window-depressed;
   color: var(--color-white) !important;
   background-color: var(--color-theme-04) !important;
 }
@@ -194,7 +194,7 @@
 }
 
 .epgGridSetupBorder {
-  @include appearance.platinumWindowControlBoxBorder;
+  @include mixins.platinum-window-control-box-border;
   width: calc(100% - var(--window-border-size) * 2);
 }
 

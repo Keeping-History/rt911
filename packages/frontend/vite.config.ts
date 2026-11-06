@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { NodePackageImporter } from "sass-embedded";
 import { defineConfig, type Plugin, type ProxyOptions } from "vite";
 import { pagesRouteSlug } from "./src/Pages/route";
 
@@ -198,6 +199,24 @@ export default defineConfig({
 			},
 		},
 	},
+	// Classicy 3 ships its fonts and art as files in dist/assets/, referenced as
+	// `new URL("assets/…", import.meta.url)`. The dev server's dependency
+	// pre-bundle (node_modules/.vite/deps/) rewrites those URLs, so fonts and
+	// art would come back as the SPA fallback page: keep both packages out of
+	// it. A production build handles the URLs itself and needs no setting.
+	optimizeDeps: {
+		exclude: ["@classicy/classicy", "@classicy/appearance-platinum"],
+	},
+	css: {
+		preprocessorOptions: {
+			scss: {
+				// Platinum's published mixins (@classicy/appearance-platinum/scss/*)
+				// reach Classicy's SCSS vocabulary through `pkg:` URLs, which only
+				// Sass's Node package importer resolves.
+				importers: [new NodePackageImporter()],
+			},
+		},
+	},
 	resolve: {
 		dedupe: ["react", "react-dom"],
 		alias: {
@@ -210,8 +229,8 @@ export default defineConfig({
 		setupFiles: ["./vitest.setup.ts"],
 		exclude: ["node_modules", "e2e/**"],
 		// jsdom can't decode audio, so classicy's ClassicySoundManager always
-		// fails to load its (base64 data URI) system sound sprites in tests —
-		// logging the full payload via console.error on every mount. Harmless
+		// fails to load Platinum's sound sprites in tests,
+		// logging an error on every mount. Harmless
 		// test-environment noise, but it floods CI logs; drop it.
 		onConsoleLog(log) {
 			if (log.includes("[ClassicySoundManager]")) return false;
