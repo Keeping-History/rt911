@@ -7,7 +7,6 @@
  */
 import {
 	ClassicyButton,
-	ClassicyIcons,
 	useAppManager,
 	useAppManagerDispatch,
 } from "@classicy/classicy";
@@ -21,8 +20,11 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
-import type { EpgIconNamespace } from "./epgIcons";
+import { epgIcons } from "./epgIcons";
+// The guide grid's diagonal hatch. Classicy 2.x shipped it as
+// ClassicyIcons.ui.stripe; 3.0 dropped that path (nothing in Classicy drew it),
+// so the 2.1.7 image lives here now.
+import stripeSvg from "./stripe.svg";
 import { visibleEpgChannels } from "./epgVisibility";
 import { tvTuneChannel } from "./TVContext";
 import epgStyles from "./TVEPGPanel.module.scss";
@@ -55,11 +57,6 @@ const GRID_TIME_WIDTH = 30;
 const GRID_WIDTH = 180;
 const CHANNEL_HEADER_WIDTH = 5;
 
-// Read lazily so the lookup always sees the object epgIcons.ts registered,
-// never a pre-registration snapshot. The cast is needed because classicy no
-// longer declares the epg namespace — it exists at runtime by registration.
-const epgIcons = () =>
-	(ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg;
 
 const truncate = (s: string, n: number) =>
 	s.length > n ? `${s.slice(0, n).trimEnd()}…` : s;
@@ -215,7 +212,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 								<img
 									key={channel.name + Date.parse(gridItem.start) + Date.parse(gridItem.end) + icon}
 									className={epgStyles.epgEntryIcon}
-									src={epgIcons()[icon]}
+									src={epgIcons[icon]}
 									alt={icon}
 								/>
 							))}
@@ -269,7 +266,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 			>
 				<img
 					className={epgStyles.epgChannelIcon}
-					src={epgIcons().channels[channel.icon]}
+					src={epgIcons.channels[channel.icon]}
 					alt={`${channel.number} ${channel.callSign} - ${channel.location}`}
 				/>
 				{channel.name}
@@ -322,7 +319,7 @@ export const TVEPGPanel: React.FC<TVEPGPanelProps> = ({ onClose }) => {
 					className={classNames(epgStyles.epgGridSetup, epgStyles.epgGridSetupBorder, epgStyles.epgGridAnimatedBackground)}
 					style={{
 						gridTemplateColumns,
-						backgroundImage: `url(${ClassicyIcons.ui.stripe})`,
+						backgroundImage: `url("${stripeSvg}")`,
 					}}
 				>
 					{epgData}

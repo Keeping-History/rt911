@@ -3,7 +3,6 @@ import {
 	ClassicyButton,
 	ClassicyCheckbox,
 	ClassicyControlGroup,
-	ClassicyIcons,
 	ClassicyWindow,
 	quitMenuItemHelper,
 	registerClassicyIcons,
@@ -23,11 +22,12 @@ import { allTags, useReadmeArticles } from "./useReadmeArticles";
 const appId   = "Readme.app";
 const appName = "README";
 
-// This app's own icon, registered into the shared registry — same shallow
-// spread as Feedback.tsx so classicy's bundled icons stay intact.
+// This app's own icon, registered into Classicy's icon registry at
+// applications.readme.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
 const ICONS = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		readme: { app: appIconPng },
 	},
 });

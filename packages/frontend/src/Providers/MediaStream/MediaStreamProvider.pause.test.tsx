@@ -34,6 +34,8 @@ vi.mock("@classicy/classicy", () => ({
 		}),
 	useAppManagerDispatch: () => dispatchMock,
 	ClassicyIcons: { applications: {} },
+	// playlistAppMeta reads app icons through the asset registry.
+	resolveClassicyAsset: () => undefined,
 	registerApp: () => {},
 }));
 

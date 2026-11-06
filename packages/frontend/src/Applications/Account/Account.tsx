@@ -4,7 +4,6 @@ import {
 	ClassicyButton,
 	ClassicyControlLabel,
 	ClassicyFileInput,
-	ClassicyIcons,
 	ClassicyWindow,
 	quitMenuItemHelper,
 	registerClassicyIcons,
@@ -27,13 +26,12 @@ const MAX_AVATAR_BYTES = 50 * 1024 * 1024;
 const appId   = "Account.app";
 const appName = "Account";
 
-// This app's own icon, registered into the shared registry at
-// ClassicyIcons.applications.account.app. registerClassicyIcons assigns
-// shallowly, so the existing applications namespace is spread in to keep
-// classicy's bundled app icons (and other apps' registrations) intact.
+// This app's own icon, registered into Classicy's icon registry at
+// applications.account.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
 const ICONS = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		account: { app: appIconPng },
 	},
 });

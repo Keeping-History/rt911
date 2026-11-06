@@ -43,8 +43,7 @@ import {
 } from "./TVContext";
 import { moveChannel, orderChannels } from "./channelOrder";
 import { ThumbnailTile } from "./ThumbnailTile";
-import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
-import type { EpgIconNamespace } from "./epgIcons";
+import { epgIcons } from "./epgIcons";
 import multiviewIcon from "./multiview.png";
 import { useThumbnailReorder } from "./useThumbnailReorder";
 import { trackAppToggle, trackChannelChange } from "../../openreplay";
@@ -96,9 +95,7 @@ type ClassicyTVProps = Record<string, never>;
 export const TV: React.FC<ClassicyTVProps> = () => {
 	const appName = "TV";
 	const appId = "TV.app";
-	// classicy no longer declares the epg namespace — epgIcons.ts registers it,
-	// so the read goes through a cast at the registered address.
-	const epgIconSet = (ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg;
+	const epgIconSet = epgIcons;
 	const appIcon = epgIconSet.app;
 	const aboutWindow = useAboutApp(appId, appIcon);
 

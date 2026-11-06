@@ -22,7 +22,6 @@
 import {
 	ClassicyApp,
 	ClassicyControlGroup,
-	ClassicyIcons,
 	ClassicyWindow,
 	intToHex,
 	quitMenuItemHelper,
@@ -114,13 +113,12 @@ const appName = "Radio Traffic";
 const UPCOMING_LANE_LIMIT = 12;
 const PREVIOUS_LANE_LIMIT = 12;
 
-// This app's own icon, registered into the shared registry at
-// ClassicyIcons.applications.radioTraffic.app. registerClassicyIcons assigns
-// shallowly, so the existing applications namespace is spread in to keep
-// classicy's bundled app icons intact (same gotcha as FlightTracker.tsx).
+// This app's own icon, registered into Classicy's icon registry at
+// applications.radioTraffic.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
 const ICONS = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		radioTraffic: { app: appIconPng },
 	},
 });

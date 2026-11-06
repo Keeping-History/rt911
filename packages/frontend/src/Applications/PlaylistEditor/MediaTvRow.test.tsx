@@ -1,16 +1,13 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { ClassicyIcons } from "@classicy/classicy";
+import { resolveClassicyAsset } from "@classicy/classicy";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import "../TV/epgIcons"; // side effect: registers ClassicyIcons.applications.epg
-import type { EpgIconNamespace } from "../TV/epgIcons";
+import { epgIcons } from "../TV/epgIcons";
 import { MediaTvRow, stationLogo, type TvEditorEntry } from "./MediaTvRow";
 
 afterEach(cleanup);
 
-// The registered namespace is the single source — the same address every
-// consumer reads. Cast because classicy no longer declares `epg` in its types;
-// the key exists at runtime only because epgIcons.ts registers it.
-const epg = () => (ClassicyIcons.applications as unknown as { epg: EpgIconNamespace }).epg;
+// epgIcons is the single source every consumer reads.
+const epg = () => epgIcons;
 
 const tvEntry = (uid: string, itemId: string): TvEditorEntry => ({
 	uid,
@@ -24,8 +21,10 @@ describe("stationLogo", () => {
 		expect(epg().channels.cnn).toBeTruthy();
 	});
 
-	it("registers the full EPG set at the ClassicyIcons address", () => {
+	it("registers the full EPG set in Classicy's icon registry", () => {
 		const { channels } = epg();
+		// The exported namespace is the one registered at applications.epg.
+		expect(resolveClassicyAsset("icons", "applications.epg.channels.cnn")).toBe(channels.cnn);
 		// 25 stations + the cctv3 alias for the CCTV-4 artwork.
 		expect(Object.keys(channels)).toHaveLength(26);
 		expect(channels.cctv3).toBe(channels.cctv4);

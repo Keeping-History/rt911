@@ -12,7 +12,7 @@ const hooks = vi.hoisted(() => ({
 vi.mock("@classicy/classicy", () => ({
 	// playlistAppMeta reads the icon registry; an empty one is enough — this
 	// suite asserts on the dispatched app id, not its chrome.
-	ClassicyIcons: { applications: {} },
+	resolveClassicyAsset: () => undefined,
 	// This module registers its own app icon at import time. Identity is all the
 	// component needs; the real function assigns into the shared registry.
 	registerClassicyIcons: <T,>(icons: T) => icons,

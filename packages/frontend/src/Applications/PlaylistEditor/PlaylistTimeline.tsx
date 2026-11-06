@@ -1,4 +1,4 @@
-import { ClassicyButton, ClassicyIcons } from "@classicy/classicy";
+import { ClassicyButton, resolveClassicyAsset } from "@classicy/classicy";
 import {
 	Fragment,
 	type PointerEvent as ReactPointerEvent,
@@ -43,16 +43,16 @@ const SCROLL_THROTTLE_MS = 50;
  * The Platinum resize cursors the Classicy View Pane dividers use, verbatim:
  * the double-arrow on an idle handle, and the single direction-of-travel arrow
  * mid-drag (Mac OS 8 window-edge idiom — the bar is the edge, the arrow is
- * where it's headed). They come from ClassicyIcons because the published
- * package inlines cursor PNGs as data URIs in its own CSS — there is no asset
- * file a stylesheet here could reference — so the cursor is set inline.
+ * where it's headed). They come from Classicy's cursor registry (the roles the
+ * Platinum package registers), read at call time, so the cursor is set
+ * inline; a role no package registers falls back to the CSS keyword alone.
  * Hotspot 8 8 = the center of the 16px cursor, where the bar meets the arrow.
  */
 export function edgeCursor(dir: "l" | "r" | "lr"): string {
-	const { resizeL, resizeR, resizeLr } = ClassicyIcons.ui.cursors;
-	const [img, fallback] =
-		dir === "l" ? [resizeL, "w-resize"] : dir === "r" ? [resizeR, "e-resize"] : [resizeLr, "col-resize"];
-	return `url(${img}) 8 8, ${fallback}`;
+	const [role, fallback] =
+		dir === "l" ? (["resizeL", "w-resize"] as const) : dir === "r" ? (["resizeR", "e-resize"] as const) : (["resizeLr", "col-resize"] as const);
+	const img = resolveClassicyAsset("cursors", role);
+	return img ? `url("${img}") 8 8, ${fallback}` : fallback;
 }
 
 type EdgeDrag = {

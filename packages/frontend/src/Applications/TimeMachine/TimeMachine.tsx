@@ -3,7 +3,6 @@ import {
 	ClassicyBalloonHelp,
 	ClassicyButton,
 	ClassicyControlGroup,
-	ClassicyIcons,
 	ClassicyPopUpMenu,
 	ClassicySlider,
 	ClassicySpinner,
@@ -43,13 +42,12 @@ import { type TransportControl, transportBalloons } from "./transportBalloons";
 import { useBookmarks } from "./useBookmarks";
 import { isWindowOpen } from "./windowState";
 
-// This app's own icon, registered into the shared registry at
-// ClassicyIcons.applications.timeMachine.app. registerClassicyIcons assigns
-// shallowly, so the existing applications namespace is spread in to keep
-// classicy's bundled app icons (and other apps' registrations) intact.
+// This app's own icon, registered into Classicy's icon registry at
+// applications.timeMachine.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
 const ICONS = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		timeMachine: { app: appIconPng },
 	},
 });

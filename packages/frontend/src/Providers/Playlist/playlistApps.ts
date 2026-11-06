@@ -1,6 +1,6 @@
 // Mapping between playlist media catalogs and the desktop apps that own them,
 // plus name/icon metadata for programmatic open/close dispatches.
-import { ClassicyIcons } from "@classicy/classicy";
+import { resolveClassicyAsset } from "@classicy/classicy";
 import { BROADCAST_STATIONS } from "../../Applications/radio-core/stationGrouping";
 import type { PlaylistApp } from "./playlistTypes";
 
@@ -39,10 +39,11 @@ const APP_NAMES: Record<string, string> = {
 	"TimeMachine.app": "Time Machine",
 };
 
-// ClassicyIcons.applications.<key>.app per component. Resolved LAZILY at call
-// time: FlightTracker/TimeMachine register their icons into the shared registry
+// The icon registry's applications.<key>.app per component. Resolved LAZILY at
+// call time: FlightTracker/TimeMachine register their icons into the registry
 // at their own module scope, so a static table here could read undefined
-// depending on import order.
+// depending on import order. Read through resolveClassicyAsset, not the
+// ClassicyIcons constant, which in Classicy 3 never shows registrations.
 const APP_ICON_KEYS: Record<string, string> = {
 	"TV.app": "epg",
 	"RadioTraffic.app": "radioTraffic",
@@ -55,10 +56,6 @@ const APP_ICON_KEYS: Record<string, string> = {
 
 export function playlistAppMeta(appId: string): { name: string; icon: string } {
 	const key = APP_ICON_KEYS[appId];
-	const registry = ClassicyIcons.applications as Record<
-		string,
-		{ app?: unknown } | undefined
-	>;
-	const icon = key ? String(registry[key]?.app ?? "") : "";
+	const icon = key ? (resolveClassicyAsset("icons", `applications.${key}.app`) ?? "") : "";
 	return { name: APP_NAMES[appId] ?? appId, icon };
 }

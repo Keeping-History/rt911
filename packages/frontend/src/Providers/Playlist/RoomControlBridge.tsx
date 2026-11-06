@@ -1,7 +1,6 @@
 import {
 	ClassicyAlert,
 	ClassicyApp,
-	ClassicyIcons,
 	registerClassicyIcons,
 	useAppManager,
 	useAppManagerDispatch,
@@ -18,13 +17,12 @@ import { usePlaylist } from "./PlaylistContext";
 const appId = "RoomControl.app";
 const appName = "Classroom";
 
-// This app's own icon, registered into the shared registry at
-// ClassicyIcons.applications.roomControl.app. registerClassicyIcons assigns
-// shallowly, so the existing applications namespace is spread in to keep
-// classicy's bundled app icons (and other apps' registrations) intact.
+// This app's own icon, registered into Classicy's icon registry at
+// applications.roomControl.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
 const ICONS = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		roomControl: { app: classroomIconPng },
 	},
 });

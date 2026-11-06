@@ -1,7 +1,6 @@
 import {
 	ClassicyAlert,
 	ClassicyApp,
-	ClassicyIcons,
 	ClassicyMenuBarExtension,
 	type ClassicyMenuItem,
 	quitMenuItemHelper,
@@ -26,11 +25,13 @@ import { SignOnWindow } from "./SignOnWindow";
 const APP_ID = "IMBuddies.app";
 const APP_NAME = "Instant Messenger";
 
-// This app's own icon, registered into the shared registry (same pattern as
-// TimeMachine.tsx). Art is a placeholder — see the brief.
+// This app's own icon, registered into Classicy's icon registry at
+// applications.imBuddies.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
+// Art is a placeholder — see the brief.
 const ICONS = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		imBuddies: { app: appIconPng },
 	},
 });

@@ -37,6 +37,8 @@ vi.mock("@classicy/classicy", () => ({
 	// playlistAppMeta (used by the Time Machine force-close effect) reads this
 	// for icon lookup; an empty registry resolves to icon: "" harmlessly.
 	ClassicyIcons: { applications: {} },
+	// playlistAppMeta reads app icons through the asset registry.
+	resolveClassicyAsset: () => undefined,
 	registerApp: () => {},
 }));
 

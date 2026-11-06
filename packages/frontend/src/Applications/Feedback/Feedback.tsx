@@ -1,6 +1,5 @@
 import {
 	ClassicyApp,
-	ClassicyIcons,
 	ClassicyWindow,
 	quitMenuItemHelper,
 	registerClassicyIcons,
@@ -22,13 +21,12 @@ import type { FeedbackFields } from "./useFeedback";
 const appId   = FEEDBACK_APP_ID;
 const appName = "Feedback";
 
-// This app's own icon, registered into the shared registry at
-// ClassicyIcons.applications.feedback.app. registerClassicyIcons assigns
-// shallowly, so the existing applications namespace is spread in to keep
-// classicy's bundled app icons (and other apps' registrations) intact.
+// This app's own icon, registered into Classicy's icon registry at
+// applications.feedback.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
 const ICONS = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		feedback: { app: appIconPng },
 	},
 });
