@@ -7,7 +7,7 @@ import type { PagerDecoderSettings } from "./PagerDecoderContext";
 import { DEFAULT_PAGER_SETTINGS } from "./PagerDecoderContext";
 import { usePagerPlayback } from "./usePagerPlayback";
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	registerAppEventHandler: vi.fn(),
 	registerApp: vi.fn(),
 }));

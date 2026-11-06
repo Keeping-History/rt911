@@ -9,7 +9,7 @@ import {
 	registerHyperCardCommandEditorMeta,
 	registerHyperCardPartEditorMeta,
 	registerHyperCardOptionPicker,
-} from "classicy";
+} from "@classicy/classicy";
 import { FlightMapPicker } from "./FlightMapPicker";
 import { NewsItemPicker } from "./NewsItemPicker";
 import { PagerMessagePicker } from "./PagerMessagePicker";

@@ -1,5 +1,5 @@
-import type { HyperCardPartProps } from "classicy";
-import { ClassicyIcons, useAppManagerDispatch } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
+import { ClassicyIcons, useAppManagerDispatch } from "@classicy/classicy";
 import { useCallback, useMemo } from "react";
 import { handleNewsContentClick } from "../../../lib/newsContentLinks";
 import { useNewsContentBalloon } from "../../../lib/useNewsContentBalloon";

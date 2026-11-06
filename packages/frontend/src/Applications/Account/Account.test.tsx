@@ -18,7 +18,7 @@ vi.mock("../../Providers/Auth/authApi", async (importOriginal) => ({
 // (ClassicyButton, ClassicyInput, ClassicyIcons, registerClassicyIcons,
 // quitMenuItemHelper) renders for real via importOriginal, so the form
 // itself is exercised end-to-end.
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	ClassicyApp:    ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	ClassicyWindow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

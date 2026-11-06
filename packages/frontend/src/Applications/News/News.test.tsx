@@ -32,7 +32,7 @@ const mockState = vi.hoisted(() => ({
 }));
 
 const balloonHandlers = vi.hoisted(() => ({ onMouseEnter: vi.fn(), onMouseLeave: vi.fn() }));
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	ClassicyWindow: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,

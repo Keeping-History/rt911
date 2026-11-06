@@ -7,7 +7,7 @@ import type {
 	ClassicyFileSystemEntry,
 	ClassicyFileSystemReconcileResult,
 	ClassicyFileSystemSnapshot,
-} from "classicy";
+} from "@classicy/classicy";
 import type { AuthUser } from "../Auth/authApi";
 import { downloadTree, fetchFilesystemFileId, pushTree } from "./directusFilesystemApi";
 

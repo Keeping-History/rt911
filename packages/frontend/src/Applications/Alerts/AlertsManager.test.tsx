@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // Apple-menu/no-desktop-icon contract without classicy's desktop chrome.
 const appProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyApp: ({
 		children,
 		...props

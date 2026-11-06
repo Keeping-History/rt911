@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // Capture every QuickTimeVideoEmbed render's props so tests can inspect what the
 // part passed and drive the onMediaElement segment hook.
 const embedProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	QuickTimeVideoEmbed: (props: Record<string, unknown>) => {
 		embedProps.push(props);
 		return (

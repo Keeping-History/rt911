@@ -1,5 +1,5 @@
 // BookmarksWindow.tsx
-import { ClassicyWindow } from "classicy";
+import { ClassicyWindow } from "@classicy/classicy";
 import type React from "react";
 import type { PersonalBookmark } from "./bookmarksApi";
 import { BookmarksTree } from "./BookmarksTree";

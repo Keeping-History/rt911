@@ -4,7 +4,7 @@ import {
 	ClassicyControlLabel,
 	ClassicyInput,
 	ClassicyPopUpMenu,
-} from "classicy";
+} from "@classicy/classicy";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import { AppSettingsFields } from "./AppSettingsFields";
 import { DateTimeField } from "./DateTimeField";

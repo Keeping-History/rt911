@@ -8,7 +8,7 @@ const hooks = vi.hoisted(() => ({
 	handler: undefined as unknown as (args: Record<string, unknown>, api: unknown) => void,
 }));
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({ setDateTime: hooks.setDateTime }),
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({ System: { Manager: { DateAndTime: { dateTimeLocked: hooks.locked } } } }),

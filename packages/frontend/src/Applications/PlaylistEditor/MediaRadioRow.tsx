@@ -1,4 +1,4 @@
-import { ClassicyIcons } from "classicy";
+import { ClassicyIcons } from "@classicy/classicy";
 import { useMemo } from "react";
 import { useStationLogos } from "../radio-core/stationLogos";
 import { MediaCardRow, type MediaCardEntry } from "./MediaCardRow";

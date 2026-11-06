@@ -48,7 +48,7 @@ interface MockMenuItem {
 // ClassicyMenuBarExtension is stubbed to plain buttons for the same jsdom
 // reason IMBuddies.test.tsx documents (the real component defers a clicked
 // item's action to an `animationend` jsdom never dispatches).
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	ClassicyApp: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
 	ClassicyWindow: (props: { title?: string; children?: React.ReactNode }) => (

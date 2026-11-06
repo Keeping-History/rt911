@@ -2,7 +2,7 @@ import {
 	ClassicyApp, ClassicyButton, ClassicyFileOpenDialog, type ClassicyFileOpenSelection,
 	ClassicyWindow, desktopVolume, fileSystemVolume, quitAppHelper,
 	quitMenuItemHelper, useAppManagerDispatch, useClassicyFileSystem,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import { useCallback, useMemo, useRef } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";

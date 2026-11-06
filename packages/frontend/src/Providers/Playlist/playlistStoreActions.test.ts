@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActionMessage, ClassicyStore } from "classicy";
+import type { ActionMessage, ClassicyStore } from "@classicy/classicy";
 import { classicyPlaylistEventHandler, playlistMergeAppData } from "./playlistStoreActions";
 
 const makeStore = (): ClassicyStore =>

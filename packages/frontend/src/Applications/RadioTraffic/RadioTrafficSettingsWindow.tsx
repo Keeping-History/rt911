@@ -6,7 +6,7 @@ import {
 	ClassicySlider,
 	ClassicyWindow,
 	MAC_OS_8_CRAYONS,
-} from "classicy";
+} from "@classicy/classicy";
 import type React from "react";
 import type { ChangeEvent, ComponentProps, Dispatch, SetStateAction } from "react";
 import styles from "../radio-core/radio.module.scss";

@@ -4,7 +4,7 @@ import {
 	ClassicySoundActionTypes,
 	useAppManager,
 	useSoundDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 // Side effect: registers this app's manifest (registerApp) at import time.
 import "./AlertsContext";
 import type React from "react";

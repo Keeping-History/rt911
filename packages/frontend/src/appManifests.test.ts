@@ -1,10 +1,10 @@
 // packages/frontend/src/appManifests.test.ts
 //
-// Deliberately NO vi.mock("classicy"): these tests exercise the real manifest
+// Deliberately NO vi.mock("@classicy/classicy"): these tests exercise the real manifest
 // registry that each context module writes into at import time. Importing a
 // context module below runs its registerApp() side effect.
 import { describe, expect, it } from "vitest";
-import { getAppManifest, listScriptableActions } from "classicy";
+import { getAppManifest, listScriptableActions } from "@classicy/classicy";
 
 import "./Applications/TV/TVContext";
 import "./Applications/FlightTracker/flightMapSettings";

@@ -10,7 +10,7 @@ import {
 	ClassicyIcons,
 	useAppManager,
 	useAppManagerDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 import classNames from "classnames";
 import type React from "react";
 import {

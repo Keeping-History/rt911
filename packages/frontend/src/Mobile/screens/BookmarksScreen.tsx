@@ -2,7 +2,7 @@
 // The mobile counterpart of the desktop TimeMachine bookmark jump list.
 // Clock writes flow through the same setDateTimeFromUtc helper — see the
 // clock-writer rule in packages/frontend/CLAUDE.md.
-import { useAppManager, useClassicyDateTime } from "classicy";
+import { useAppManager, useClassicyDateTime } from "@classicy/classicy";
 import { useContext, useState } from "react";
 import { useBookmarks } from "../../Applications/TimeMachine/useBookmarks";
 import {

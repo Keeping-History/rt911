@@ -1,4 +1,4 @@
-import { registerApp } from "classicy";
+import { registerApp } from "@classicy/classicy";
 
 // Description-only manifests: neither Alerts app has a custom reducer, but
 // every desktop app registers a description — it is the balloon-help copy for

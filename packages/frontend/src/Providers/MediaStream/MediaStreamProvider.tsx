@@ -1,4 +1,4 @@
-import { useAppManager, useAppManagerDispatch, useClassicyDateTime } from "classicy";
+import { useAppManager, useAppManagerDispatch, useClassicyDateTime } from "@classicy/classicy";
 import {
 	type FC,
 	type ReactNode,

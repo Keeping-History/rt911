@@ -8,8 +8,8 @@
  * reject; meta.stackId of "saved:directus:<id>" means the open stack came
  * from this provider, so save updates that row instead of creating a new one.
  */
-import type { HCSavedStackRef, HCStack, HyperCardSaveProvider } from "classicy";
-import { registerHyperCardSaveProvider } from "classicy";
+import type { HCSavedStackRef, HCStack, HyperCardSaveProvider } from "@classicy/classicy";
+import { registerHyperCardSaveProvider } from "@classicy/classicy";
 import {
 	createStack,
 	getStack,

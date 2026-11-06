@@ -17,7 +17,7 @@ const dispatchMock = vi.hoisted(() => vi.fn());
 const mockApps = vi.hoisted(() => ({
 	current: {} as Record<string, { open?: boolean; name?: string; icon?: string }>,
 }));
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: FIXED_LOCAL_DATE,
 		dateTime: mockDateTime,

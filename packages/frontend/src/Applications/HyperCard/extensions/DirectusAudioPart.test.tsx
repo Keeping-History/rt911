@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { HyperCardPartProps } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
 import { DirectusAudioPart } from "./DirectusAudioPart";
 
 afterEach(() => {

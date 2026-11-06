@@ -7,7 +7,7 @@
 // tick and the pause/resume/seek anchoring, which is what makes pause
 // correct here even though the desktop menu-bar clock never mounts on
 // mobile.
-import { useClassicyDateTime } from "classicy";
+import { useClassicyDateTime } from "@classicy/classicy";
 import { useCallback, useRef } from "react";
 import { virtualUtcMs } from "../Providers/MediaStream/virtualClock";
 

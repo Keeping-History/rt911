@@ -1,4 +1,4 @@
-import type { ClassicyStore } from "classicy";
+import type { ClassicyStore } from "@classicy/classicy";
 import { describe, expect, it } from "vitest";
 import {
 	DEFAULT_FLIGHT_LOOP_SETTINGS,

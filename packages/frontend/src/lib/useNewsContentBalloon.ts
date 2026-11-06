@@ -1,4 +1,4 @@
-import { useClassicyBalloonHelp } from "classicy";
+import { useClassicyBalloonHelp } from "@classicy/classicy";
 import { type MouseEvent, useCallback, useRef, useState } from "react";
 import { parseBalloonTitle } from "./newsContentLinks";
 

@@ -3,7 +3,7 @@ import {
 	registerHyperCardCommand,
 	registerHyperCardPart,
 	registerHyperCardStack,
-} from "classicy";
+} from "@classicy/classicy";
 import { DirectusAudioPart } from "./DirectusAudioPart";
 import { DirectusFlightMapPart } from "./DirectusFlightMapPart";
 import { DirectusMultiviewPart } from "./DirectusMultiviewPart";

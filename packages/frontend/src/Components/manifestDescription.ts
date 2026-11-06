@@ -1,4 +1,4 @@
-import { getAppManifest } from "classicy";
+import { getAppManifest } from "@classicy/classicy";
 
 /**
  * Balloon-help copy for an app's desktop shortcut: the app's registered
@@ -10,7 +10,7 @@ import { getAppManifest } from "classicy";
  * when no manifest is registered; manifestDescription.test.ts enforces that
  * every desktop app actually registers a described manifest.
  *
- * Test-mock note: a test that fully mocks "classicy" for a component whose
+ * Test-mock note: a test that fully mocks "@classicy/classicy" for a component whose
  * graph reaches this module needs `getAppManifest: () => undefined` in the
  * factory (same hazard as `registerApp` — see frontend CLAUDE.md).
  */

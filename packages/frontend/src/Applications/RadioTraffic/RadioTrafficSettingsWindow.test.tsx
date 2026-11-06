@@ -10,7 +10,7 @@ afterEach(cleanup);
 // are the seams and the chrome is not: stand-ins render the props it passes,
 // which is exactly what this suite is about. Nothing here is asserted THROUGH a
 // double — the draft behaviour under test is the window's own.
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	ClassicyWindow: ({
 		children,
 		title,

@@ -5,7 +5,7 @@ import {
 	ClassicyIcons,
 	ClassicyWindowFrame,
 	useAppManagerDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 import { useEffect, useRef } from "react";
 // Side effect: register the Directus-collection HyperCard extension parts and
 // stacks with classicy's HyperCard plugin registries. The HyperCard app itself

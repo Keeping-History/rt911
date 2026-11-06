@@ -3,7 +3,7 @@ import {
 	ClassicyControlGroup,
 	ClassicyDatePicker,
 	ClassicyTimePicker,
-} from "classicy";
+} from "@classicy/classicy";
 import { displayWallClockToUtcIso, utcIsoToDisplayWallClock } from "./editorState";
 
 const TIMELINE_MIN = new Date(2001, 8, 9); // Sept 9 2001 (display wall clock)

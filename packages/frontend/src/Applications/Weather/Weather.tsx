@@ -10,7 +10,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 	useClassicyDateTime,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import { type FC, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import appIconPng from "./app.png";

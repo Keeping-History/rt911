@@ -1,4 +1,4 @@
-import { ClassicyButton, ClassicyWindow } from "classicy";
+import { ClassicyButton, ClassicyWindow } from "@classicy/classicy";
 import type React from "react";
 import { useMemo } from "react";
 import type { ChatBuddy, ChatStateReason } from "../../Providers/MediaStream/MediaStreamContext";

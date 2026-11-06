@@ -20,8 +20,8 @@ const store = vi.hoisted(() => ({
 	},
 }));
 
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	// Serve whatever selector the component passes, against our fake store.
 	useAppManager: (sel: (s: unknown) => unknown) => sel(store.current),
 	useAppManagerDispatch: () => vi.fn(),

@@ -2,7 +2,7 @@ import {
 	ClassicyFileSystemEntryFileType,
 	ClassicyIcons,
 	type ClassicyFileSystemTree,
-} from "classicy";
+} from "@classicy/classicy";
 
 /**
  * The present-day CMS pages, plus other external web shortcuts, as the

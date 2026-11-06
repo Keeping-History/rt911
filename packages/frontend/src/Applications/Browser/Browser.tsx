@@ -10,7 +10,7 @@ import {
 	quitAppHelper,
 	useAppManager,
 	useAppManagerDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import DOMPurify from "dompurify";
 import {

@@ -3,7 +3,7 @@ import {
 	getHyperCardCommandEditorMeta,
 	getHyperCardPartEditorMeta,
 	getHyperCardOptionPicker,
-} from "classicy";
+} from "@classicy/classicy";
 import { registerHyperCardEditorMetadata } from "./editorMetadata";
 
 describe("registerHyperCardEditorMetadata", () => {

@@ -4,7 +4,7 @@ import {
 	ClassicyFormButtonRow,
 	ClassicyInput,
 	ClassicyWindow,
-} from "classicy";
+} from "@classicy/classicy";
 import { useState } from "react";
 
 export interface SendMessageDialogFormProps {

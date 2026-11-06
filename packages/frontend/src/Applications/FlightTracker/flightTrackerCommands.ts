@@ -2,8 +2,8 @@
 // Registered under "ClassicyAppFlightRemote", NOT "ClassicyAppFlightTracker*":
 // flightMapSettings.ts already owns that prefix and the registry routes by
 // first-prefix-match, so a nested prefix would be swallowed by its handler.
-import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerApp } from "classicy";
+import type { ActionMessage, ClassicyStore } from "@classicy/classicy";
+import { registerApp } from "@classicy/classicy";
 import { z } from "zod";
 
 const appId = "FlightTracker.app";

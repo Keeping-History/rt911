@@ -10,7 +10,7 @@
  * `tsc` does not catch it either: the icon objects are typed loosely enough that
  * a missing leaf reads as `any`/`string` at the call site.
  */
-import { ClassicyIcons } from "classicy";
+import { ClassicyIcons } from "@classicy/classicy";
 import { describe, expect, it } from "vitest";
 import multiviewIcon from "./multiview.png";
 import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg

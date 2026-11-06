@@ -1,5 +1,5 @@
-import type { HyperCardPartProps } from "classicy";
-import { useClassicyDateTime } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
+import { useClassicyDateTime } from "@classicy/classicy";
 import { useContext, useEffect, useMemo } from "react";
 import { MediaStreamContext } from "../../../Providers/MediaStream/MediaStreamContext";
 import stationsRaw from "../../Weather/stations.json";

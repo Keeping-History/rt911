@@ -14,7 +14,7 @@ const NOW_ISO = "2001-09-11T13:00:00.000Z";
 // dependency comparison, re-firing the effect (and its setState calls) every
 // render — an infinite render loop that pegs the CPU without ever finishing.
 const FIXED_LOCAL_DATE = new Date(NOW_ISO);
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: FIXED_LOCAL_DATE,
 		dateTime: NOW_ISO,

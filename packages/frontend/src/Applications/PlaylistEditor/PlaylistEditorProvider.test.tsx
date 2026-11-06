@@ -5,8 +5,8 @@ import { PlaylistEditorProvider, usePlaylistEditor } from "./PlaylistEditorProvi
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 
 const dispatchMock = vi.fn();
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	useAppManagerDispatch: () => dispatchMock,
 }));
 

@@ -4,7 +4,7 @@ import {
 	ClassicyWindow,
 	useAppManagerDispatch,
 	useClassicyHelpMenu,
-} from "classicy";
+} from "@classicy/classicy";
 import { type FC, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { APP_PROVENANCE, type AppProvenance } from "../../data/provenance";
 import { AIRCRAFT_MODEL_DERIVATIVE_NOTICE } from "../../data/aircraftCredits";

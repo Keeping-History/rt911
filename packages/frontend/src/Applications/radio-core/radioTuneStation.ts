@@ -1,4 +1,4 @@
-import type { ActionMessage } from "classicy";
+import type { ActionMessage } from "@classicy/classicy";
 
 /**
  * One-shot remote tune command delivered through the store (TVContext's

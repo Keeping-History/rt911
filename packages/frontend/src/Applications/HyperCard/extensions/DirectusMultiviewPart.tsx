@@ -1,4 +1,4 @@
-import type { HyperCardPartProps } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
 import { useMemo, useState } from "react";
 import { DirectusVideo } from "./DirectusVideoPart";
 import { type DirectusVideoOptions, readVideoOptions } from "./videoOptions";

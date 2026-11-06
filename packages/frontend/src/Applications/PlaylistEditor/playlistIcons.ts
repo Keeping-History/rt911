@@ -1,4 +1,4 @@
-import { ClassicyIcons, registerClassicyIcons } from "classicy";
+import { ClassicyIcons, registerClassicyIcons } from "@classicy/classicy";
 import appPng from "./app.png";
 import docPng from "./doc.png";
 import editDateTimePng from "./edit-date-time.png";

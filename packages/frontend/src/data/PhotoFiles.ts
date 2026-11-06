@@ -2,7 +2,7 @@ import {
 	ClassicyFileSystemEntryFileType,
 	ClassicyIcons,
 	type ClassicyFileSystemTree,
-} from "classicy";
+} from "@classicy/classicy";
 
 const ICP_PHOTO_BASE_URL = "https://files.911realtime.org/images/icp";
 

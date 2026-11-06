@@ -1,4 +1,4 @@
-import { ClassicyIcons } from "classicy";
+import { ClassicyIcons } from "@classicy/classicy";
 import type { PlaylistEntry } from "../../Providers/Playlist/playlistTypes";
 import type { EditorAction } from "./editorState";
 import { playlistEditorIcons } from "./playlistIcons";

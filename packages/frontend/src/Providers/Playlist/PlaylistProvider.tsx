@@ -12,7 +12,7 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 	type ActionMessage,
-} from "classicy";
+} from "@classicy/classicy";
 import {
 	type FC,
 	type ReactNode,

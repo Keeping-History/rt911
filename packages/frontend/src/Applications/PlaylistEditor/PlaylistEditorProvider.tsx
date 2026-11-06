@@ -1,4 +1,4 @@
-import { useAppManagerDispatch } from "classicy";
+import { useAppManagerDispatch } from "@classicy/classicy";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useReducer, useRef, useState } from "react";
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import { RoomCommandError, sendRoomLock } from "../../Providers/Playlist/roomApi";

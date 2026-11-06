@@ -6,7 +6,7 @@
  * `itemId` stores an array (see `DirectusPagerPart.tsx`), so this picker
  * always runs in multi-select mode.
  */
-import { ClassicyInput, ClassicyPopUpMenu } from "classicy";
+import { ClassicyInput, ClassicyPopUpMenu } from "@classicy/classicy";
 import { useCallback, useEffect, useState } from "react";
 import {
 	fetchDirectusPagerList,

@@ -1,5 +1,5 @@
-import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerApp } from "classicy";
+import type { ActionMessage, ClassicyStore } from "@classicy/classicy";
+import { registerApp } from "@classicy/classicy";
 import { z } from "zod";
 
 export const PLAYLIST_EDITOR_APP_ID = "PlaylistEditor.app";

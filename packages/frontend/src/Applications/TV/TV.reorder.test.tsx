@@ -33,8 +33,8 @@ const FAKE_ITEM_2 = {
 	jump: 0,
 } as unknown as MediaItem;
 
-vi.mock("classicy", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("classicy")>();
+vi.mock("@classicy/classicy", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@classicy/classicy")>();
 	const fakeState = () => ({
 		System: {
 			Manager: {

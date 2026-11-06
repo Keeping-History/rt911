@@ -1,4 +1,4 @@
-import { ClassicyButton, ClassicyCheckbox, ClassicyInput, ClassicyWindow } from "classicy";
+import { ClassicyButton, ClassicyCheckbox, ClassicyInput, ClassicyWindow } from "@classicy/classicy";
 import { useMemo, useState } from "react";
 import type { TagDef } from "../../Providers/MediaStream/MediaStreamContext";
 import styles from "./tagPicker.module.scss";

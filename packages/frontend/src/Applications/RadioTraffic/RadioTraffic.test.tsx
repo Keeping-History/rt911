@@ -30,7 +30,7 @@ const mockDispatch = vi.hoisted(() => vi.fn());
 // clock.
 const mockAppOpen = vi.hoisted(() => ({ current: true }));
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	// The app menu is rendered flat as buttons. The real window puts these behind
 	// a menu bar, which is chrome this suite is not about — but "File ▸ Settings…

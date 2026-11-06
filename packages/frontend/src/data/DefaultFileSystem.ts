@@ -2,7 +2,7 @@ import {
 	ClassicyFileSystemEntryFileType,
 	ClassicyIcons,
 	type ClassicyFileSystemTree,
-} from "classicy";
+} from "@classicy/classicy";
 import {newspaperEntries} from "./NewspaperFiles";
 import {pageShortcutEntries} from "./pageShortcuts";
 import {photoEntries} from "./PhotoFiles"

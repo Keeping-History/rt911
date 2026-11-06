@@ -12,7 +12,7 @@ const NOW_ISO = "2001-09-11T13:00:00.000Z";
 // for why a fresh `new Date(...)` per render would infinite-loop the tick effect.
 let mockDateTime = NOW_ISO;
 const FIXED_LOCAL_DATE = new Date(NOW_ISO);
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: FIXED_LOCAL_DATE,
 		dateTime: mockDateTime,

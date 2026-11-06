@@ -1,13 +1,13 @@
 // packages/frontend/src/Applications/TimeMachine/TimeMachine.test.tsx
 //
-// Deliberately NO vi.mock("classicy"): this exercises the real manifest
+// Deliberately NO vi.mock("@classicy/classicy"): this exercises the real manifest
 // registry (the registerApp() side effect in timeMachineSettings.ts) and the
 // real describeAppState()/ClassicyBalloonHelp wiring, proving the
 // manifest -> balloon path end-to-end (see appManifests.test.ts for the same
 // no-mock pattern).
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { describeAppState, getAppWindow, useAppManager } from "classicy";
+import { describeAppState, getAppWindow, useAppManager } from "@classicy/classicy";
 import {
 	readTimeMachineSettings,
 	TIME_MACHINE_APP_ID,

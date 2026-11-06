@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ClassicyMenuItem } from "classicy";
+import type { ClassicyMenuItem } from "@classicy/classicy";
 
 const dispatchMock = vi.fn();
 // Menus are captured per window id so a test can invoke a File-menu item — the
 // only way to reach Rename/Duplicate now that the header chrome is gone.
 const menus = vi.hoisted(() => ({ current: {} as Record<string, ClassicyMenuItem[]> }));
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	ClassicyWindow: ({
 		children,

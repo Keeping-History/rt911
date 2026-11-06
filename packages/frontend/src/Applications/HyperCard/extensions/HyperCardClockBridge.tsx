@@ -1,4 +1,4 @@
-import { registerHyperCardEffectHandler, useAppManager, useClassicyDateTime } from "classicy";
+import { registerHyperCardEffectHandler, useAppManager, useClassicyDateTime } from "@classicy/classicy";
 import { useEffect, useRef } from "react";
 import { setDateTimeFromUtc } from "../../TimeMachine/setVirtualClock";
 import { clampClockIso } from "./dateRange";

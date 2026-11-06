@@ -1,4 +1,4 @@
-import { ClassicyButton, ClassicyIcons } from "classicy";
+import { ClassicyButton, ClassicyIcons } from "@classicy/classicy";
 import {
 	Fragment,
 	type PointerEvent as ReactPointerEvent,

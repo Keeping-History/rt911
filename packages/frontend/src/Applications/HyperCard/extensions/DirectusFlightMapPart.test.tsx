@@ -1,6 +1,6 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { HyperCardPartProps } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
 import {
 	MediaStreamContext,
 	type MediaStreamContextValue,
@@ -8,7 +8,7 @@ import {
 
 // Mock the clock hook and the heavy WebGL FlightMap; capture what the part
 // passes to the map.
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: new Date("2001-09-11T12:46:00.000Z"),
 		tzOffset: 0,

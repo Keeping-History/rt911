@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ClassicyFileDialogVolume, ClassicyFileOpenSelection } from "classicy";
+import type { ClassicyFileDialogVolume, ClassicyFileOpenSelection } from "@classicy/classicy";
 import { RadioTrafficClipPicker } from "./RadioTrafficClipPicker";
 
 const fileOpenDialog = vi.hoisted(() => ({
@@ -11,8 +11,8 @@ const fileOpenDialog = vi.hoisted(() => ({
 		onCancelFunc?: () => void;
 	},
 }));
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyFileOpenDialog: (props: {
 		open?: boolean;
 		volumes?: ClassicyFileDialogVolume[];

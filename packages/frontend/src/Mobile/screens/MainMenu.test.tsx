@@ -7,7 +7,7 @@ import { MainMenu } from "./MainMenu";
 // Partial classicy mock — full replacement breaks on transitive imports.
 // mockDateTimeLocked is mutated per-test (see PlaylistProvider.test.tsx).
 let mockDateTimeLocked = false;
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	useAppManager: (sel: (s: unknown) => unknown) =>
 		sel({

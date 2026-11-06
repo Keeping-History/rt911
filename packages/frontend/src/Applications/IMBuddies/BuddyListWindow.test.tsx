@@ -64,7 +64,7 @@ vi.mock("./IMBuddiesProvider", () => ({
 // stubbed to a real <button> — a native disabled button already refuses
 // clicks with no internal-state trap to fall into (unlike ClassicyCheckbox),
 // so a stub is safe here; nothing else from classicy is touched.
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	ClassicyWindow: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
 	ClassicyButton: (props: {

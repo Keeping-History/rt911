@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { ClassicyFileSystemEntryFileType, validateStack } from "classicy";
+import { ClassicyFileSystemEntryFileType, validateStack } from "@classicy/classicy";
 import { describe, expect, it } from "vitest";
 import { DefaultFileSystem } from "./DefaultFileSystem";
 

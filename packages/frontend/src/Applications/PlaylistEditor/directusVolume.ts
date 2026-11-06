@@ -1,5 +1,5 @@
-import type { ClassicyFileDialogEntry, ClassicyFileDialogVolume } from "classicy";
-import { ClassicyIcons } from "classicy";
+import type { ClassicyFileDialogEntry, ClassicyFileDialogVolume } from "@classicy/classicy";
+import { ClassicyIcons } from "@classicy/classicy";
 import {
 	NOTABLE_FLIGHTS,
 	OBSERVER_FLIGHTS,

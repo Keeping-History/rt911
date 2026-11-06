@@ -6,7 +6,7 @@ import {
 	registerClassicyIcons,
 	useAppManager,
 	useAppManagerDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import type React from "react";

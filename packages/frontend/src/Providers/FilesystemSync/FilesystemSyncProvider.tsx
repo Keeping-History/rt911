@@ -3,8 +3,8 @@
 // so this component owns the login-pull / first-login-seed / logout-reset
 // transitions and the pre-sign-out flush. Mount it INSIDE AuthProvider.
 import { type FC, type ReactNode, useEffect, useRef } from "react";
-import { dispatch, useClassicyFileSystem } from "classicy";
-import type { ClassicyFileSystemEntry } from "classicy";
+import { dispatch, useClassicyFileSystem } from "@classicy/classicy";
+import type { ClassicyFileSystemEntry } from "@classicy/classicy";
 import { useAuth } from "../Auth/AuthContext";
 import { registerBeforeSignOut } from "../Auth/beforeSignOut";
 import { DefaultFileSystem } from "../../data/DefaultFileSystem";

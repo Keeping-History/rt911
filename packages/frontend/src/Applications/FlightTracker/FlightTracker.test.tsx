@@ -44,7 +44,7 @@ const mockClock = vi.hoisted(() => ({ current: "2001-09-11T13:00:00.000Z" }));
 // classicy primitives → plain elements; useAppManager returns a state the
 // isRunning selector reads as "open". ClassicyWindow records its props so
 // tests can drive appMenu items; mockAppData.current feeds persisted app data.
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	ClassicyApp: ({ children }: { children: React.ReactNode }) => (
 		<div>{children}</div>
 	),

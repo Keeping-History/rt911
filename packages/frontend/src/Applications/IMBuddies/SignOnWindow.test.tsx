@@ -29,7 +29,7 @@ vi.mock("./IMBuddiesProvider", () => ({
 
 // Partial mock: spreading the real module first means adding an import to
 // SignOnWindow.tsx cannot silently blank a symbol this factory forgot to list.
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	ClassicySoundActionTypes: { ClassicySoundPlay: "ClassicySoundPlay" },
 	useSoundDispatch: () => () => {},

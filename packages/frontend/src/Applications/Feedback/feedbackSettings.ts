@@ -1,4 +1,4 @@
-import type { ActionMessage } from "classicy";
+import type { ActionMessage } from "@classicy/classicy";
 import type { AuthUser } from "../../Providers/Auth/authApi";
 
 /** The three fields the form can pre-fill on the user's behalf. */

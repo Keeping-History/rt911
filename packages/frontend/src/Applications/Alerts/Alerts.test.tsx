@@ -15,8 +15,8 @@ const mockAppRunning = vi.hoisted(() => ({ value: true }));
 // Spy for the sound-manager dispatch so tests can assert the alert chime fires.
 const mockSoundDispatch = vi.hoisted(() => vi.fn());
 
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	useSoundDispatch: () => mockSoundDispatch,
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => (
 		<div>{children}</div>

@@ -6,7 +6,7 @@ import {
     registerClassicyIcons,
     useAppManager,
     useClassicyDateTime,
-} from 'classicy'
+} from '@classicy/classicy'
 // Side effect: registers this app's manifest (registerApp) at import time.
 import './MarketWatchContext';
 import { manifestDescription } from '../../Components/manifestDescription';

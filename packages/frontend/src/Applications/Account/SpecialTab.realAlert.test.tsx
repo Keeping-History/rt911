@@ -23,7 +23,7 @@ vi.mock("../../Providers/Auth/accountApi", () => ({
 const mockAuth = vi.hoisted(() => ({ user: null as AuthUser | null }));
 vi.mock("../../Providers/Auth/AuthContext", () => ({ useAuth: () => mockAuth }));
 
-// Deliberately no vi.mock("classicy") — that is the entire point of this file.
+// Deliberately no vi.mock("@classicy/classicy") — that is the entire point of this file.
 
 import { SpecialTab } from "./SpecialTab";
 

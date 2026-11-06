@@ -1,4 +1,4 @@
-import type { ActionMessage } from "classicy";
+import type { ActionMessage } from "@classicy/classicy";
 
 // Reader preferences for the README app. Ephemeral UI (the open settings window,
 // the draft form) is NOT persisted; only the tag filter is — same split as

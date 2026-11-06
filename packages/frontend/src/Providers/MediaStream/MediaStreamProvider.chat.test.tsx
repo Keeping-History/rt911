@@ -35,7 +35,7 @@ class FakeWebSocket {
 	close() {}
 }
 
-// Same vi.mock("classicy", ...) stub used by MediaStreamProvider.news.test.tsx /
+// Same vi.mock("@classicy/classicy", ...) stub used by MediaStreamProvider.news.test.tsx /
 // MediaStreamProvider.flights.test.tsx. `let`, not `const`: the seek tests
 // below advance/rewind the clock by reassigning BOTH of these and re-rendering
 // (see setClock). The Date instance must stay stable across renders that don't
@@ -43,7 +43,7 @@ class FakeWebSocket {
 const NOW_ISO = "2001-09-11T13:00:00.000Z";
 let mockDateTime = NOW_ISO;
 let mockLocalDate = new Date(NOW_ISO);
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: mockLocalDate,
 		dateTime: mockDateTime,

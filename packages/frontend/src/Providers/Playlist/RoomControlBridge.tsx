@@ -6,7 +6,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 	useClassicyDateTime,
-} from "classicy";
+} from "@classicy/classicy";
 import { useContext, useEffect, useRef, useState } from "react";
 import { clampClockIso } from "../../Applications/HyperCard/extensions/dateRange";
 import { setDateTimeFromUtc } from "../../Applications/TimeMachine/setVirtualClock";

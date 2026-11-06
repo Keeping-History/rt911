@@ -9,7 +9,7 @@ import {
 	registerClassicyIcons,
 	useAppManager,
 	useAppManagerDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";

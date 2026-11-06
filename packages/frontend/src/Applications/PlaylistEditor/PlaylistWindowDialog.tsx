@@ -4,7 +4,7 @@ import {
 	ClassicyForm,
 	ClassicyFormButtonRow,
 	ClassicyWindow,
-} from "classicy";
+} from "@classicy/classicy";
 import { useState } from "react";
 import { playlistUtcMs } from "../../Providers/Playlist/playlistTypes";
 import { DateTimeField } from "./DateTimeField";

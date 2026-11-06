@@ -1,4 +1,4 @@
-import { ClassicyButton, ClassicyIcons } from "classicy";
+import { ClassicyButton, ClassicyIcons } from "@classicy/classicy";
 // Classicy styles + Platinum fonts moved out of the entry chunk (the fonts
 // alone are ~900 kB of base64 the mobile shell shouldn't parse at boot); this
 // surface uses the Classicy look, so it imports both itself — classicy.css

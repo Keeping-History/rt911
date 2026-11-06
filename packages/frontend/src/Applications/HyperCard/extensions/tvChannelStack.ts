@@ -1,4 +1,4 @@
-import type { HCStack } from "classicy";
+import type { HCStack } from "@classicy/classicy";
 
 /**
  * A built-in HyperCard stack that demonstrates the TV video extensions:

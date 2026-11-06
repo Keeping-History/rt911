@@ -48,7 +48,7 @@ const mockAppData = vi.hoisted(
 );
 const mockDispatch = vi.hoisted(() => vi.fn());
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	ClassicyApp: ({ children }: { children: React.ReactNode }) => (
 		<div>{children}</div>
 	),

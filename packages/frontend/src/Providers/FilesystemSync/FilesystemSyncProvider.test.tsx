@@ -5,7 +5,7 @@ const reconcileWithAdapters = vi.fn();
 const load = vi.fn();
 const snapshot = vi.fn(() => JSON.stringify({ "Macintosh HD": { _type: "directory" } }));
 const dispatch = vi.fn();
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyFileSystem: () => ({ reconcileWithAdapters, load, snapshot }),
 	dispatch: (...a: unknown[]) => dispatch(...a),
 	registerApp: () => {},

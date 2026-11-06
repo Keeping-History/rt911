@@ -1,4 +1,4 @@
-import { ClassicyIcons, registerClassicyIcons } from "classicy";
+import { ClassicyIcons, registerClassicyIcons } from "@classicy/classicy";
 import cc from "./epgIcons/cc.png";
 import esp from "./epgIcons/esp.png";
 import mpaaG from "./epgIcons/mpaa-g.png";

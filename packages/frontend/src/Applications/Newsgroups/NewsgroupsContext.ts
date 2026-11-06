@@ -1,4 +1,4 @@
-import { registerApp } from "classicy";
+import { registerApp } from "@classicy/classicy";
 
 // Description-only manifest: Newsgroups has no custom reducer, but every
 // desktop app registers a description — it is the balloon-help copy for the

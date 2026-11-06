@@ -10,7 +10,7 @@ const NOW_ISO = "2001-09-11T13:00:00.000Z";
 let mockDateTime = NOW_ISO;
 let mockLocalDate = new Date(NOW_ISO);
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: mockLocalDate,
 		dateTime: mockDateTime,

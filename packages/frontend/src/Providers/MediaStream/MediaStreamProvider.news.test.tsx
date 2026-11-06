@@ -14,7 +14,7 @@ let mockDateTime = NOW_ISO;
 // that don't advance the clock, or the tick effect re-fires forever.
 let mockLocalDate = new Date(NOW_ISO);
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: mockLocalDate,
 		dateTime: mockDateTime,

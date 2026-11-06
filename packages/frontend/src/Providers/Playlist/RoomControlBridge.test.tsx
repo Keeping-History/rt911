@@ -9,7 +9,7 @@ const hooks = vi.hoisted(() => ({
 	locked: false,
 }));
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	// playlistAppMeta reads the icon registry; an empty one is enough — this
 	// suite asserts on the dispatched app id, not its chrome.
 	ClassicyIcons: { applications: {} },

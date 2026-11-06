@@ -15,7 +15,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 	useClassicyDateTime,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import { BalloonBevelButton, BalloonClassicyButton } from "./balloonButtons";

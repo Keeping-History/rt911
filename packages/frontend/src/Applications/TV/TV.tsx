@@ -15,7 +15,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 	useClassicyDateTime,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

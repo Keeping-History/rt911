@@ -1,4 +1,4 @@
-import type { HyperCardPartProps } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
 import { useMemo } from "react";
 import { fetchDirectusPagerItem } from "./directusCollections";
 import { resolveItemIds, useDirectusItem } from "./useDirectusItem";

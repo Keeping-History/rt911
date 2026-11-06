@@ -1,6 +1,6 @@
 // Mapping between playlist media catalogs and the desktop apps that own them,
 // plus name/icon metadata for programmatic open/close dispatches.
-import { ClassicyIcons } from "classicy";
+import { ClassicyIcons } from "@classicy/classicy";
 import { BROADCAST_STATIONS } from "../../Applications/radio-core/stationGrouping";
 import type { PlaylistApp } from "./playlistTypes";
 

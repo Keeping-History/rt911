@@ -6,8 +6,8 @@ import type { ChangeEvent, ReactNode } from "react";
 // HyperCardItemPicker.test.tsx does. ClassicyPopUpMenu's real implementation
 // is a custom listbox, not a native <select> — Weather.test.tsx's own stub
 // (a real <select>) is the established, simpler-to-drive-in-tests shape.
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyWindow: ({ children, id, title }: { children?: ReactNode; id?: string; title?: string }) => (
 		<div data-testid={`win-${id}`} data-title={title}>
 			{children}

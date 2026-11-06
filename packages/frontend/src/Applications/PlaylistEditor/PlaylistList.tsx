@@ -3,7 +3,7 @@ import {
 	ClassicyControlLabel,
 	ClassicyTable,
 	type ClassicyTableColumn,
-} from "classicy";
+} from "@classicy/classicy";
 import { useCallback, useEffect, useState } from "react";
 import {
 	createPlaylist,

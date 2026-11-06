@@ -18,7 +18,7 @@ const mockPause = vi.fn();
 const mockResume = vi.fn();
 const mockSetDateTime = vi.fn();
 
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	// localDate is the DISPLAY value classicy's ticking clock returns (UTC
 	// shifted by tzOffset -4) — useFineClock strips the offset back off via

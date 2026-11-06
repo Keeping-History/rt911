@@ -9,7 +9,7 @@
  * Two current consumers: PlaylistEditor's "Add Media" → Radio Traffic folder,
  * and HyperCard's directusAudio clip picker.
  */
-import type { ClassicyFileDialogEntry, ClassicyFileDialogVolume } from "classicy";
+import type { ClassicyFileDialogEntry, ClassicyFileDialogVolume } from "@classicy/classicy";
 import { directusGet } from "../../lib/directusQueue";
 import { BROADCAST_STATIONS, stationKey } from "./stationGrouping";
 

@@ -1,7 +1,7 @@
 // Account → Special: the two irreversible actions. Both run entirely on the
 // server (profile-api extension) because neither is possible with user
 // credentials. Spec: plans/2026-07-28-account-special-tab-design.md
-import { ClassicyAlert, ClassicyButton, ClassicyControlLabel, ClassicyInput } from "classicy";
+import { ClassicyAlert, ClassicyButton, ClassicyControlLabel, ClassicyInput } from "@classicy/classicy";
 import type React from "react";
 import { useState } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";

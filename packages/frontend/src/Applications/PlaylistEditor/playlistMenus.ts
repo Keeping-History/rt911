@@ -1,4 +1,4 @@
-import type { ClassicyMenuItem } from "classicy";
+import type { ClassicyMenuItem } from "@classicy/classicy";
 import type { AddAction } from "./addActions";
 import type { LockState } from "./PlaylistEditorProvider";
 import { listSettingsApps } from "./settingsRegistry";

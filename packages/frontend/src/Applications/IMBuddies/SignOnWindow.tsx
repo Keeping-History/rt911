@@ -7,7 +7,7 @@ import {
 	ClassicyWindow,
 	useAppManagerDispatch,
 	useSoundDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 import type React from "react";
 import { useCallback } from "react";
 import { useAuth } from "../../Providers/Auth/AuthContext";

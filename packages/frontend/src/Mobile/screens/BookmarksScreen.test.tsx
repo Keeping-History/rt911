@@ -9,7 +9,7 @@ const { setDateTime } = vi.hoisted(() => ({ setDateTime: vi.fn() }));
 // Mutated per-test to drive the forced-clock write guard (see
 // PlaylistProvider.test.tsx for the same mutable-mock convention).
 let mockDateTimeLocked = false;
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	useClassicyDateTime: () => ({
 		dateTime: "2001-09-11T12:40:00.000Z",

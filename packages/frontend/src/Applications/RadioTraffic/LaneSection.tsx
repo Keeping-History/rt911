@@ -27,7 +27,7 @@
 // clip, in the same slots, in the same order, just in the small player instead
 // of the full one (story 027).
 
-import { ClassicyBevelButton } from "classicy";
+import { ClassicyBevelButton } from "@classicy/classicy";
 import type React from "react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";

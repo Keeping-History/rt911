@@ -7,7 +7,7 @@
 // after ClassicyAppManagerProvider.
 import "classicy/dist/classicy.css";
 import type { ReactNode } from "react";
-import { ClassicyAppManagerProvider, registerClassicyFileSystemAdapter } from "classicy";
+import { ClassicyAppManagerProvider, registerClassicyFileSystemAdapter } from "@classicy/classicy";
 import { DefaultFileSystem } from "../data/DefaultFileSystem";
 import { defaultFileSystemSeedMigrations } from "../data/defaultFileSystemSeedMigrations";
 import { GA_MEASUREMENT_ID, isProductionHost } from "../lib/analytics";

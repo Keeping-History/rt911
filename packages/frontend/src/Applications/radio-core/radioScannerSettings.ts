@@ -1,4 +1,4 @@
-import type { ActionMessage } from "classicy";
+import type { ActionMessage } from "@classicy/classicy";
 import type { CSSProperties } from "react";
 
 export const VIZ_MODES = ["Bars", "Spectrum", "Radial", "Wave"] as const;

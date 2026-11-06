@@ -2,7 +2,7 @@
 // The wheel becomes the time dial: one step = one minute, center-click
 // commits, MENU (handled by the shell) abandons the scrub. The anchor is the
 // clock value at mount — the display target doesn't drift while you dial.
-import { useAppManager, useClassicyDateTime } from "classicy";
+import { useAppManager, useClassicyDateTime } from "@classicy/classicy";
 import { useContext, useRef, useState } from "react";
 import {
 	formatUtcAsLocalTime,

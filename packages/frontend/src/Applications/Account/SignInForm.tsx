@@ -1,6 +1,6 @@
 import type React from "react";
 import { useState } from "react";
-import { ClassicyButton, ClassicyInput, ClassicyControlGroup } from "classicy";
+import { ClassicyButton, ClassicyInput, ClassicyControlGroup } from "@classicy/classicy";
 import { isHostOf } from "../../Providers/Auth/authApi";
 
 type Provider = "google" | "facebook" | "apple";

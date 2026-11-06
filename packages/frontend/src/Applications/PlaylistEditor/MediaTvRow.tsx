@@ -1,4 +1,4 @@
-import { ClassicyIcons } from "classicy";
+import { ClassicyIcons } from "@classicy/classicy";
 import "../TV/epgIcons"; // side effect: registers ClassicyIcons.applications.epg
 import type { EpgIconNamespace } from "../TV/epgIcons";
 import { MediaCardRow, type MediaCardEntry } from "./MediaCardRow";

@@ -1,4 +1,4 @@
-import type { ClassicyFileSystemSeedMigration } from "classicy";
+import type { ClassicyFileSystemSeedMigration } from "@classicy/classicy";
 
 // One-time corrections for content that shipped with a typo/error in
 // DefaultFileSystem.ts and is now baked into returning visitors' persisted

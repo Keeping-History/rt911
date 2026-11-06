@@ -1,4 +1,4 @@
-import { getTheme, getThemeVars } from "classicy";
+import { getTheme, getThemeVars } from "@classicy/classicy";
 import type { CSSProperties } from "react";
 
 /**

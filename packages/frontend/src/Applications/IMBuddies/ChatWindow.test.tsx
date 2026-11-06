@@ -74,7 +74,7 @@ vi.mock("./IMBuddiesProvider", () => ({
 // components' sound/analytics hooks (`tq()`/`useSoundDispatch`) already
 // no-op safely without a provider (verified against classicy's source),
 // so nothing here needs a stub to avoid throwing.
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	// `title` is surfaced as text, standing in for the real title bar: the
 	// window is titled with the buddy's name, and a wrong-buddy lookup would

@@ -2,8 +2,8 @@
 // identity rides the httpOnly session cookie (credentials:"include"), the same
 // stance as authApi.ts. The tree is stored as a single JSON file in directus_files
 // (Wasabi-backed) and pointed to by the `filesystem` m2o field on directus_users.
-import { isValidFileSystemEntry } from "classicy";
-import type { ClassicyFileSystemEntry } from "classicy";
+import { isValidFileSystemEntry } from "@classicy/classicy";
+import type { ClassicyFileSystemEntry } from "@classicy/classicy";
 import { DIRECTUS_URL } from "../../lib/endpoints";
 
 const FILE_FIELD = "filesystem";

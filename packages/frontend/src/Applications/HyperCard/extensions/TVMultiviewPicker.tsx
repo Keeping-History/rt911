@@ -9,7 +9,7 @@
  * (`start`, `end`, `autoPlay`, …) are still hand-authored in the part's own
  * JSON, same as today.
  */
-import { ClassicyPopUpMenu } from "classicy";
+import { ClassicyPopUpMenu } from "@classicy/classicy";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchDirectusVideoList, type DirectusVideoListItem } from "./directusCollections";
 import {

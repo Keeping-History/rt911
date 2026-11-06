@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ClassicyFileOpenSelection, ClassicyMenuItem } from "classicy";
+import type { ClassicyFileOpenSelection, ClassicyMenuItem } from "@classicy/classicy";
 import { PlaylistEditor } from "./PlaylistEditor";
 
 const dispatchMock = vi.fn();
@@ -16,8 +16,8 @@ const fileOpenDialog = vi.hoisted(() => ({
 		onOpenFunc?: (selections: ClassicyFileOpenSelection[]) => void;
 	},
 }));
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyApp: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	ClassicyWindow: ({ children, id, appMenu }: {
 		children?: React.ReactNode; id?: string; appMenu?: ClassicyMenuItem[];
