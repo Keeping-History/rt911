@@ -1,13 +1,13 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import type { HyperCardPartProps } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
 import {
 	MediaStreamContext,
 	type MediaStreamContextValue,
 } from "../../../Providers/MediaStream/MediaStreamContext";
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({ dateTime: "2001-09-11T12:46:00.000Z" }),
 	ClassicyControlGroup: ({ label, children }: { label?: string; children?: ReactNode }) => (
 		<div>

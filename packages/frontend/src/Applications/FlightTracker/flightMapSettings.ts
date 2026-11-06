@@ -1,5 +1,5 @@
-import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerApp } from "classicy";
+import type { ActionMessage, ClassicyStore } from "@classicy/classicy";
+import { registerApp } from "@classicy/classicy";
 import { z } from "zod";
 import type { LoopSpeed, LoopWindowMinutes } from "./loopClock";
 import { type CameraMode, DEFAULT_CAMERA_MODE, normalizeCameraMode } from "./flightCamera";

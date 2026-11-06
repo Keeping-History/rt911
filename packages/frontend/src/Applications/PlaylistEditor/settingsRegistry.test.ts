@@ -1,7 +1,7 @@
 // Exercises the REAL classicy manifest registry (no vi.mock), the same way
 // appManifests.test.ts does: importing a context module runs its registerApp
 // side effect.
-import { registerApp } from "classicy";
+import { registerApp } from "@classicy/classicy";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 

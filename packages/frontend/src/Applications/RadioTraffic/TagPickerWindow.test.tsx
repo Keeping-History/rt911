@@ -5,8 +5,8 @@ import type { TagDef } from "../../Providers/MediaStream/MediaStreamContext";
 // ClassicyWindow needs the app-manager store to mount. The stub keeps the two
 // things the shell is responsible for observable: the id/title it opens under,
 // and the close box being wired to the same seam as Cancel.
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyWindow: ({
 		children,
 		id,

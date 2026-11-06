@@ -3,7 +3,7 @@
  * the Radio Traffic tag tree (radio-core/radioTrafficVolume) and fill itemId
  * with the chosen clip's numeric id, rather than typing it blind.
  */
-import { ClassicyBevelButton, ClassicyControlLabel, ClassicyFileOpenDialog, ClassicyInput } from "classicy";
+import { ClassicyBevelButton, ClassicyControlLabel, ClassicyFileOpenDialog, ClassicyInput } from "@classicy/classicy";
 import { useState } from "react";
 import { buildRadioTrafficVolume } from "../../radio-core/radioTrafficVolume";
 

@@ -1,10 +1,10 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { HyperCardPartProps } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
 
 const dispatchMock = vi.hoisted(() => vi.fn());
 const balloonHandlers = vi.hoisted(() => ({ onMouseEnter: vi.fn(), onMouseLeave: vi.fn() }));
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	useAppManagerDispatch: () => dispatchMock,
 	useClassicyBalloonHelp: () => ({

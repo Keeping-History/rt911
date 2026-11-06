@@ -2,7 +2,7 @@
 // apps a settings entry can target, and what fields the chosen app's
 // registered state schema declares — the data behind the Add Settings
 // dropdown and the Settings window's generated form.
-import { getAppManifest, listAppManifests } from "classicy";
+import { getAppManifest, listAppManifests } from "@classicy/classicy";
 import { z } from "zod";
 import { playlistAppMeta } from "../../Providers/Playlist/playlistApps";
 

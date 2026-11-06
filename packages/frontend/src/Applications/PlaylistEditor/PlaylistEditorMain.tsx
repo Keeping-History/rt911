@@ -1,4 +1,4 @@
-import { ClassicyControlLabel, ClassicySplitView, ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "classicy";
+import { ClassicyControlLabel, ClassicySplitView, ClassicyTabs, ClassicyTree, type ClassicyTreeNode } from "@classicy/classicy";
 import type { ReactNode } from "react";
 import { Disclosure } from "../../Components/Disclosure/Disclosure";
 import type { MediaEntry, PlaylistEntry } from "../../Providers/Playlist/playlistTypes";

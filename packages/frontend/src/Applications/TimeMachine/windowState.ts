@@ -1,4 +1,4 @@
-import { type ClassicyStoreSystemAppWindows, getAppWindow } from "classicy";
+import { type ClassicyStoreSystemAppWindows, getAppWindow } from "@classicy/classicy";
 
 /**
  * True when a window with `windowId` is present in the persisted store and not

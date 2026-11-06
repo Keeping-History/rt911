@@ -174,7 +174,7 @@ const renderMockMenuItems = (items: MockMenuItem[] = []): React.ReactNode =>
 // `menuItems` keyed on `disabled` + `onClickFunc`) using plain native
 // buttons, so `disabled` is enforced by the browser/jsdom itself rather than
 // by re-implementing the real component's gating logic.
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	ClassicyApp: (props: { name: string; children?: React.ReactNode }) => (
 		<div>

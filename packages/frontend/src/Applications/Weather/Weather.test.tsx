@@ -24,7 +24,7 @@ const mockClock = vi.hoisted(() => ({ current: "2001-09-11T12:40:00.000Z" }));
 const dispatchMock = vi.hoisted(() => vi.fn());
 const mockAppData = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	ClassicyApp: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	ClassicyWindow: (
 		props: Record<string, unknown> & { children?: React.ReactNode },

@@ -1,4 +1,4 @@
-import { ClassicyControlLabel, type ClassicyMenuItem, ClassicyWindow } from "classicy";
+import { ClassicyControlLabel, type ClassicyMenuItem, ClassicyWindow } from "@classicy/classicy";
 import { EntryForm } from "./EntryForm";
 import { SETTINGS_WINDOW_ID, usePlaylistEditor } from "./PlaylistEditorProvider";
 

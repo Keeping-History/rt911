@@ -17,8 +17,8 @@ const dispatchSpy = vi.fn();
 // which the window's "OK" button renders -- is left real via importActual;
 // ChatWindow.test.tsx/MapControls.test.tsx already establish that
 // ClassicyButton renders standalone with no provider.
-vi.mock("classicy", async () => {
-	const actual = await vi.importActual<Record<string, unknown>>("classicy");
+vi.mock("@classicy/classicy", async () => {
+	const actual = await vi.importActual<Record<string, unknown>>("@classicy/classicy");
 	return {
 		...actual,
 		ClassicyWindow: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,

@@ -8,7 +8,7 @@ import type { MediaItem } from "../Providers/MediaStream/MediaStreamContext";
 
 const captured: { props: Record<string, unknown>[] } = { props: [] };
 
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	QuickTimeVideoEmbed: (props: Record<string, unknown>) => {
 		captured.props.push(props);

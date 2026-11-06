@@ -5,7 +5,6 @@ import {
 	ClassicyColorPicker,
 	ClassicyControlGroup,
 	ClassicyControlLabel,
-	ClassicyIcons,
 	ClassicyPopUpMenu,
 	ClassicyRadioInput,
 	ClassicySlider,
@@ -16,7 +15,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 	useClassicyDateTime,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import appIconPng from "./app.png";
 import {
@@ -104,13 +103,12 @@ import {
 import { type SecondaryTrack, useMultiFlightTracks } from "./useMultiFlightTracks";
 import { toggleFlightSelection } from "./selectionToggle";
 
-// This app's own icon, registered into the shared registry at
-// ClassicyIcons.applications.flightTracker.app. registerClassicyIcons assigns
-// shallowly, so the existing applications namespace is spread in to keep
-// classicy's bundled app icons intact.
+// This app's own icon, registered into Classicy's icon registry at
+// applications.flightTracker.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
 const ICONS = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		flightTracker: { app: appIconPng },
 	},
 });

@@ -12,7 +12,7 @@ import {
 	quitMenuItemHelper,
 	useAppManager,
 	useAppManagerDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import { useContext, useEffect, useRef, useState } from "react";
 import { useAboutApp } from "../../Components/AboutApp/AboutApp";

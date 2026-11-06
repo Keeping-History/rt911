@@ -7,7 +7,7 @@ import {
 	useAppManagerDispatch,
 	useClassicyDateTime,
 	useSoundDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 import {
 	createContext,
 	type FC,

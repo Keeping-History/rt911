@@ -18,8 +18,8 @@ vi.mock("../../Providers/Auth/accountApi", () => ({
 const mockAuth = vi.hoisted(() => ({ user: null as AuthUser | null }));
 vi.mock("../../Providers/Auth/AuthContext", () => ({ useAuth: () => mockAuth }));
 
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	// Renders label, message and ALL buttons with their disabled state, so
 	// tests can drive the typed-confirm gate without classicy's window chrome.
 	ClassicyAlert: ({

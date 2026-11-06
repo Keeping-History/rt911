@@ -1,13 +1,20 @@
 name: Bump classicy
 
-# Pull the latest `classicy` release into pnpm-lock.yaml (and
-# packages/frontend/package.json's version pin) and, if it actually changed,
+# Pull the latest Classicy release into pnpm-lock.yaml (and
+# packages/frontend/package.json's version ranges) and, if it actually changed,
 # land it on `main` so the deployed frontend picks it up.
 #
-# Why this exists: the frontend pins `classicy` to an exact version and
-# `.husky/pre-commit` auto-bumps it on every human commit — but between commits
-# a fresh classicy release won't reach production on its own. This workflow is
-# the button (manual or fired by classicy's publish) that forces that refresh.
+# Classicy 3 ships as two npm packages released together at the same version:
+# the core, `@classicy/classicy` (the unscoped `classicy` package stopped at
+# 2.x), and its Platinum look, `@classicy/appearance-platinum`, whose peer
+# range is `^<core version>`. `pnpm bump:classicy` updates both in one command,
+# and the "Check lockstep" step below refuses a bump that leaves them on
+# different versions (one published, the other not yet).
+#
+# Why this exists: `.husky/pre-commit` auto-bumps Classicy on every human
+# commit — but between commits a fresh Classicy release won't reach production
+# on its own. This workflow is the button (manual or fired by classicy's
+# publish) that forces that refresh.
 # Because build.yml installs with `--frozen-lockfile`, the bump MUST be
 # committed to the lockfile on `main` — "just rebuild" would reinstall the old
 # version.
@@ -98,21 +105,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Update classicy
+      - name: Update Classicy (@classicy/classicy and @classicy/appearance-platinum)
         run: pnpm bump:classicy
+
+      - name: Check lockstep
+        working-directory: packages/frontend
+        run: |
+          # Both packages publish at the same version from one release. If one
+          # landed on npm before the other, wait for the next dispatch rather
+          # than open a PR whose Platinum peer range misses its core.
+          core=$(node -p 'require("./node_modules/@classicy/classicy/package.json").version')
+          platinum=$(node -p 'require("./node_modules/@classicy/appearance-platinum/package.json").version')
+          echo "::notice::@classicy/classicy $core, @classicy/appearance-platinum $platinum"
+          if [ "$core" != "$platinum" ]; then
+            echo "::error::@classicy/classicy ($core) and @classicy/appearance-platinum ($platinum) differ; not opening a bump PR"
+            exit 1
+          fi
 
       - name: Open bump PR and enable auto-merge
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           TAG: ${{ github.event.client_payload.tag }}
         run: |
-          # classicy is pinned to an exact version, so `pnpm update --latest`
-          # rewrites packages/frontend/package.json's pin in addition to the
-          # lockfile — check (and stage) both, or the bump PR would leave
-          # package.json stale and the next non-frozen `pnpm install` would
-          # revert it.
+          # `pnpm update --latest` rewrites packages/frontend/package.json's
+          # ranges for both packages in addition to the lockfile — check (and
+          # stage) both files, or the bump PR would leave package.json stale
+          # and the next non-frozen `pnpm install` would revert it.
           if git diff --quiet -- pnpm-lock.yaml packages/frontend/package.json; then
-            echo "::notice::classicy already up to date — no PR needed"
+            echo "::notice::Classicy already up to date — no PR needed"
             exit 0
           fi
 
@@ -138,7 +158,7 @@ jobs:
             pr=$(gh pr create \
               --base main --head "$BRANCH" \
               --title "$title" \
-              --body "Automated classicy bump.${TAG:+ New version: \`$TAG\`.}")
+              --body "Automated Classicy bump: \`@classicy/classicy\` and \`@classicy/appearance-platinum\`, together.${TAG:+ New version: \`$TAG\`.}")
           fi
 
           # Merge once the required checks pass; delete the branch afterwards.

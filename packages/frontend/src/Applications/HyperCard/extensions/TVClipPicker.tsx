@@ -4,7 +4,7 @@
  * off the channel(s) to embed. `channelId` stores an array (see
  * `DirectusVideoPart.tsx`), so this picker always runs in multi-select mode.
  */
-import { ClassicyPopUpMenu } from "classicy";
+import { ClassicyPopUpMenu } from "@classicy/classicy";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchDirectusVideoList, type DirectusVideoListItem } from "./directusCollections";
 import {

@@ -27,8 +27,8 @@ const FAKE_ITEM_2 = {
 	subtitles: "https://files.example.org/wnbc/subs.srt",
 } as unknown as MediaItem;
 
-vi.mock("classicy", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("classicy")>();
+vi.mock("@classicy/classicy", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@classicy/classicy")>();
 	// Built per call so a test's mockAppData override is visible to the selector.
 	const fakeState = () => ({
 		System: {

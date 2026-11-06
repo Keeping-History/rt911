@@ -1,5 +1,5 @@
 // packages/frontend/src/Mobile/screens/MainMenu.tsx
-import { useAppManager } from "classicy";
+import { useAppManager } from "@classicy/classicy";
 import { useContext, useState } from "react";
 import { IpodList, type IpodListItem } from "../IpodList";
 import { ScreenNavContext, useScreenWheel } from "../WheelContext";

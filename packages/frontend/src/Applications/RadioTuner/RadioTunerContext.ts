@@ -1,5 +1,5 @@
-import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerApp } from "classicy";
+import type { ActionMessage, ClassicyStore } from "@classicy/classicy";
+import { registerApp } from "@classicy/classicy";
 import { z } from "zod";
 import type { RadioScannerSettings } from "../radio-core/radioScannerSettings";
 

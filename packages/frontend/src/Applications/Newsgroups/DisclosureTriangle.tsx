@@ -3,7 +3,7 @@
  *
  * Classicy's own <ClassicyDisclosure> owns its open state and bundles children,
  * which can't host aligned table columns. We reuse only its global CSS classes
- * (from "classicy/dist/classicy.css", imported in app.tsx) so the triangle is
+ * (injected by @classicy/classicy and the Platinum package) so the triangle is
  * pixel-identical while collapse state stays under our control. The polygon
  * geometry is copied verbatim from the classicy source.
  */

@@ -1,4 +1,4 @@
-import type { ClassicyStoreSystemAppWindow, ClassicyStoreSystemAppWindows } from "classicy";
+import type { ClassicyStoreSystemAppWindow, ClassicyStoreSystemAppWindows } from "@classicy/classicy";
 import { describe, expect, it } from "vitest";
 import { isWindowOpen } from "./windowState";
 

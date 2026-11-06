@@ -13,7 +13,7 @@ let mockPaused = false;
 const setDateTimeMock = vi.hoisted(() => vi.fn());
 const dispatchMock = vi.hoisted(() => vi.fn());
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	// Unlike the other provider test mocks, this one returns `paused` — the
 	// whole point of the file.
 	useClassicyDateTime: () => ({
@@ -34,6 +34,8 @@ vi.mock("classicy", () => ({
 		}),
 	useAppManagerDispatch: () => dispatchMock,
 	ClassicyIcons: { applications: {} },
+	// playlistAppMeta reads app icons through the asset registry.
+	resolveClassicyAsset: () => undefined,
 	registerApp: () => {},
 }));
 

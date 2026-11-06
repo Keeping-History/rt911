@@ -1,4 +1,4 @@
-import type { HyperCardPartProps } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	type DirectusAudioItem,

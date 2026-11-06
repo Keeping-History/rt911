@@ -1,4 +1,4 @@
-import { ClassicyBalloonHelp, ClassicyBevelButton } from "classicy";
+import { ClassicyBalloonHelp, ClassicyBevelButton } from "@classicy/classicy";
 import type React from "react";
 import styles from "./trafficTools.module.scss";
 import { type Tool, TOOL_BALLOONS, TOOL_ICONS, TOOL_LABELS, TOOLS } from "./toolMode";

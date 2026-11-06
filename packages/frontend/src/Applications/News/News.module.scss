@@ -1,4 +1,4 @@
-@use 'classicy/scss/appearance';
+@use '@classicy/appearance-platinum/scss/mixins';
 
 .newsHeader {
   position: sticky;
@@ -9,7 +9,7 @@
   width: 100%;
   background-color: var(--color-system-03);
   gap: var(--window-padding-size);
-  @include appearance.platinumWindowBoxShadow;
+  @include mixins.platinum-window-box-shadow;
 
 }
 

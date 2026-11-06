@@ -6,7 +6,7 @@ import {
     type ClassicyFileInputHandle,
     ClassicyInput,
     ClassicyTextEditor,
-} from "classicy";
+} from "@classicy/classicy";
 import type { FeedbackFields } from "./useFeedback";
 import type { FeedbackDefaults } from "./feedbackSettings";
 import styles from "./Feedback.module.scss";

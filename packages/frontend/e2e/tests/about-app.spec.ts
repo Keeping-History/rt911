@@ -6,7 +6,7 @@ import { expect, test } from "../fixtures";
 // a re-registered persisted window (i.e. this same About window on every
 // reopen after the first) is deliberately left unfocused, so without
 // AboutAppWindow explicitly focusing itself (AboutApp.tsx), a reopened About
-// window would render dimmed (classicyWindowInactive) and behind the app's
+// window would render dimmed (.classicyWindow.inactive) and behind the app's
 // own main window (classicyWindowActiveApp, z-index 150) -- unclickable
 // because it's underneath. No unit test can see this: this repo's unit-test
 // pattern (AboutApp.test.tsx) stubs ClassicyWindow to a children-passthrough
@@ -14,6 +14,11 @@ import { expect, test } from "../fixtures";
 // browser, driving the real classicy window manager end to end, can.
 //
 // Weather is picked because it has no auth/network dependency to stub.
+
+// Classicy 3 window states are bare classes beside the root class
+// (`.classicyWindow.active`), not folded into it (`classicyWindowActive`).
+const ACTIVE = /(^|\s)active(\s|$)/;
+const INACTIVE = /(^|\s)inactive(\s|$)/;
 test("About window stays on top across close and reopen", async ({ page }) => {
 	await page.goto("/");
 	await expect(page.locator(".classicyDesktop")).toBeVisible();
@@ -37,8 +42,8 @@ test("About window stays on top across close and reopen", async ({ page }) => {
 	await openAbout();
 	const aboutWindow = page.getByRole("application", { name: "About Weather" });
 	await expect(aboutWindow).toBeVisible();
-	await expect(aboutWindow).toHaveClass(/classicyWindowActive\b/);
-	await expect(aboutWindow).not.toHaveClass(/classicyWindowInactive/);
+	await expect(aboutWindow).toHaveClass(ACTIVE);
+	await expect(aboutWindow).not.toHaveClass(INACTIVE);
 	await expect(aboutWindow.getByText(/NOAA NCEI/)).toBeVisible();
 
 	// Close via the window's own close box (exercises ClassicyWindow's close(),
@@ -47,23 +52,21 @@ test("About window stays on top across close and reopen", async ({ page }) => {
 	await expect(aboutWindow).toBeHidden();
 
 	// Reopen: this is the regression this spec exists for. Before Finding 1's
-	// fix, the reopened window rendered classicyWindowInactive/
+	// fix, the reopened window rendered .inactive/
 	// classicyWindowActiveApp -- dimmed and occluded by the Weather app's own
 	// main window -- because the window record already existed in the store
 	// from the first open, so ClassicyWindowOpen's own focus-on-register
 	// branch didn't fire a second time.
 	await openAbout();
 	await expect(aboutWindow).toBeVisible();
-	await expect(aboutWindow).toHaveClass(/classicyWindowActive\b/);
-	await expect(aboutWindow).not.toHaveClass(/classicyWindowInactive/);
+	await expect(aboutWindow).toHaveClass(ACTIVE);
+	await expect(aboutWindow).not.toHaveClass(INACTIVE);
 	await expect(aboutWindow.getByText(/NOAA NCEI/)).toBeVisible();
 
 	// Close via the in-window OK button (Finding 6): it used to bypass
 	// ClassicyWindow's close() entirely, dispatching nothing, leaving the
-	// Weather app's main window dimmed (classicyWindowInactive) afterward.
+	// Weather app's main window dimmed (.inactive) afterward.
 	await aboutWindow.getByRole("button", { name: "OK" }).click();
 	await expect(aboutWindow).toBeHidden();
-	await expect(page.getByRole("application", { name: "Weather" })).toHaveClass(
-		/classicyWindowActive\b/,
-	);
+	await expect(page.getByRole("application", { name: "Weather" })).toHaveClass(ACTIVE);
 });

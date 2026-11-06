@@ -2,7 +2,8 @@
  * The TV control bar is now icon-only, so a missing icon is a blank button.
  *
  * This is not hypothetical: classicy dropped `ClassicyIcons.applications.epg` on
- * a routine version bump, which is why the EPG artwork now lives in this repo.
+ * a routine version bump, which is why the EPG artwork now lives in this repo,
+ * and Classicy 3 stopped reflecting registrations in `ClassicyIcons` at all.
  * A key that disappears the same way resolves to `undefined`, React renders
  * `<img src="undefined">`, and the result is a broken image with no error
  * anywhere — the buttons carry no text to fall back on.
@@ -10,16 +11,14 @@
  * `tsc` does not catch it either: the icon objects are typed loosely enough that
  * a missing leaf reads as `any`/`string` at the call site.
  */
-import { ClassicyIcons } from "classicy";
+import { ClassicyIcons } from "@classicy/classicy";
 import { describe, expect, it } from "vitest";
 import multiviewIcon from "./multiview.png";
-import "./epgIcons"; // side effect: registers ClassicyIcons.applications.epg
-import type { EpgIconNamespace } from "./epgIcons";
+import { epgIcons } from "./epgIcons";
 
-// Read through the registry, exactly as TV.tsx does — a key that was never
-// registered (or got dropped) fails here the same way it would on screen.
-const epgIconSet = (ClassicyIcons.applications as unknown as { epg: EpgIconNamespace })
-	.epg;
+// Read exactly as TV.tsx does — a key that was never registered (or got
+// dropped) fails here the same way it would on screen.
+const epgIconSet = epgIcons;
 
 const icons: [string, unknown][] = [
 	["play", ClassicyIcons.system.quicktime.playButton],

@@ -1,8 +1,8 @@
 // Generic store plugin for the playlist engine: merge keys into any app's
 // `data` without per-app set-state actions. Registered under its own prefix
 // (TVContext-style) so it routes ahead of the core app reducer.
-import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerApp } from "classicy";
+import type { ActionMessage, ClassicyStore } from "@classicy/classicy";
+import { registerApp } from "@classicy/classicy";
 import { z } from "zod";
 
 /** Merge keys into apps[appId].data — used for playlist settings entries. */

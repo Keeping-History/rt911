@@ -24,7 +24,7 @@ vi.mock("./IMBuddiesProvider", () => ({
 // ClassicyAppManagerProvider tree to render its children (same as
 // ChatWindow.test.tsx/BuddyListWindow.test.tsx), so it alone is stubbed to a
 // plain passthrough div. Everything else is left real.
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	ClassicyWindow: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
 }));

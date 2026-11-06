@@ -1,4 +1,4 @@
-import { ClassicyWindow } from "classicy";
+import { ClassicyWindow } from "@classicy/classicy";
 import type React from "react";
 import styles from "./IMBuddies.module.scss";
 import { useIMBuddies } from "./IMBuddiesProvider";

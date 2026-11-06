@@ -1,4 +1,4 @@
-import { ClassicyButton, ClassicyControlLabel } from "classicy";
+import { ClassicyButton, ClassicyControlLabel } from "@classicy/classicy";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { MediaEntry } from "../../Providers/Playlist/playlistTypes";
 import type { EditorEntry } from "./editorState";

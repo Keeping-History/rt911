@@ -1,4 +1,4 @@
-import { ClassicyIcons, registerClassicyIcons } from "classicy";
+import { registerClassicyIcons } from "@classicy/classicy";
 import cc from "./epgIcons/cc.png";
 import esp from "./epgIcons/esp.png";
 import mpaaG from "./epgIcons/mpaa-g.png";
@@ -41,11 +41,14 @@ import wttg from "./epgIcons/channels/wttg.png";
 import wusa from "./epgIcons/channels/wusa.png";
 
 /**
- * Registration-only module for the EPG icon set (moved out of classicy: it is
- * product-lineup-specific, not desktop chrome). Importing this module — for
- * side effect only — puts the icons at ClassicyIcons.applications.epg, which
- * is the ONE address consumers read them from; nothing here is exported, so
- * they can't be imported around the registry. `EPGProgram.icons[]` entries in
+ * The EPG icon set (moved out of classicy: it is product-lineup-specific, not
+ * desktop chrome), registered into Classicy's icon registry at
+ * `applications.epg` and exported as `epgIcons`, the ONE object consumers read
+ * them from. Classicy 3's `ClassicyIcons` constant is a snapshot of the
+ * shipped tree that never shows registrations, so the old address
+ * (`ClassicyIcons.applications.epg`) is `undefined` there; read `epgIcons`, or
+ * `resolveClassicyAsset("icons", "applications.epg.<key>")` for a single
+ * leaf. `EPGProgram.icons[]` entries in
  * the guide JSON index the flat keys (cc/esp/ratings badges) and
  * `EPGChannel.icon` indexes `channels` (lowercase station slugs).
  *
@@ -60,12 +63,12 @@ export type EpgIconNamespace = Record<string, string> & {
 	channels: Record<string, string>;
 };
 
-// registerClassicyIcons assigns shallowly at the TOP level only, so the
-// applications namespace must be spread in — dropping that spread would
-// clobber classicy's bundled app icons and other apps' registrations.
-registerClassicyIcons({
+// registerClassicyIcons deep-merges and returns its argument, so this touches
+// nothing else in the tree and hands back the registered namespace. The cast
+// widens it to EpgIconNamespace, whose index signature lets guide JSON keys
+// index the flat badges.
+export const epgIcons = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		epg: {
 			app: tv,
 			cc, esp, mpaaG, mpaaNc17, mpaaPg, mpaaPg13, mpaaR, mpaaUnrated,
@@ -77,4 +80,4 @@ registerClassicyIcons({
 			},
 		},
 	},
-});
+}).applications.epg as unknown as EpgIconNamespace;

@@ -1,4 +1,4 @@
-import { ClassicyControlGroup } from "classicy";
+import { ClassicyControlGroup } from "@classicy/classicy";
 import type { FC } from "react";
 import type {
 	WeatherForecast,

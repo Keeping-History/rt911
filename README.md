@@ -49,11 +49,11 @@ Other root scripts:
 
 ### Local vs. published Classicy
 
-The frontend depends on the published `classicy` package by default. If you are also developing Classicy itself, you can link a local build. From `packages/frontend`:
+The frontend depends on the published Classicy packages by default: the core, `@classicy/classicy`, and the Platinum look, `@classicy/appearance-platinum`, always at the same version. If you are also developing Classicy itself, you can link a local build of both. Build the checkout first (`pnpm build` at its root, then `pnpm exec vite build` in `packages/appearance/platinum`), then, from `packages/frontend`:
 
 ```sh
-pnpm use:local       # link a locally built classicy
-pnpm use:published   # remove the link and install from npm
+pnpm use:local       # link ../../../classicy (or $CLASSICY_DIR) and its Platinum package
+pnpm use:published   # remove both links and install from npm
 ```
 
 ## Applications

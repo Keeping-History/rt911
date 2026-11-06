@@ -1,8 +1,8 @@
-// Deliberately NO vi.mock("classicy"): the helper reads the real manifest
+// Deliberately NO vi.mock("@classicy/classicy"): the helper reads the real manifest
 // registry, same as appManifests.test.ts.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { registerApp } from "classicy";
+import { registerApp } from "@classicy/classicy";
 import { describe, expect, it } from "vitest";
 import { manifestDescription } from "./manifestDescription";
 

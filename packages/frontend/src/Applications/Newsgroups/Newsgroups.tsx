@@ -9,7 +9,7 @@ import {
 	ClassicyWindow,
 	quitMenuItemHelper,
 	useAppManager,
-} from "classicy";
+} from "@classicy/classicy";
 // Side effect: registers this app's manifest (registerApp) at import time.
 import "./NewsgroupsContext";
 import { manifestDescription } from "../../Components/manifestDescription";

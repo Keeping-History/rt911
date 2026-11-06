@@ -7,7 +7,7 @@ import {
 	ClassicyControlGroup,
 	ClassicyControlLabel,
 	ClassicyPopUpMenu,
-} from "classicy";
+} from "@classicy/classicy";
 import { isNotable, isObserver, isPresidential } from "./notableFlights";
 import { PROVENANCE_NOTE, isEstimated, sourceLabel } from "./flightProvenance";
 import { formatCoords, formatDurationMs, type LegEstimates } from "./flightEta";

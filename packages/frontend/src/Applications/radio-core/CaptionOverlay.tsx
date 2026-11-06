@@ -1,5 +1,5 @@
 import type React from "react";
-import { useQuickTimeSubtitles } from "classicy";
+import { useQuickTimeSubtitles } from "@classicy/classicy";
 import { useEffect, useState } from "react";
 import styles from "./radio.module.scss";
 import { type CaptionStyle, captionTextStyle } from "./radioScannerSettings";

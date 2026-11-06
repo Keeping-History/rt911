@@ -1,4 +1,4 @@
-import { ClassicyFileSystemEntryFileType } from "classicy";
+import { ClassicyFileSystemEntryFileType } from "@classicy/classicy";
 import { describe, expect, it } from "vitest";
 import { DefaultFileSystem } from "./DefaultFileSystem";
 import {

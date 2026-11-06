@@ -1,12 +1,11 @@
 import {
     ClassicyApp,
-    ClassicyIcons,
     ClassicyWindow,
     quitMenuItemHelper,
     registerClassicyIcons,
     useAppManager,
     useClassicyDateTime,
-} from 'classicy'
+} from '@classicy/classicy'
 // Side effect: registers this app's manifest (registerApp) at import time.
 import './MarketWatchContext';
 import { manifestDescription } from '../../Components/manifestDescription';
@@ -25,13 +24,12 @@ import { TickerTape } from './TickerTape'
 import type { MarketTag } from './types'
 import { useMarketData } from './useMarketData'
 
-// This app's own icon, registered into the shared registry at
-// ClassicyIcons.applications.marketWatch.app. registerClassicyIcons assigns
-// shallowly, so the existing applications namespace is spread in to keep
-// classicy's bundled app icons (and other apps' registrations) intact.
+// This app's own icon, registered into Classicy's icon registry at
+// applications.marketWatch.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
 const ICONS = registerClassicyIcons({
     applications: {
-        ...ClassicyIcons.applications,
         marketWatch: { app: appIconPng },
     },
 })

@@ -13,7 +13,7 @@ let mockClock = {
 	tzOffset: -4,
 	setDateTime: vi.fn(),
 };
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	useAppManagerDispatch: () => (a: Record<string, unknown>) => dispatched.push(a),
 	useAppManager: (sel: (s: unknown) => unknown) =>

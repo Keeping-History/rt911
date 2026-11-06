@@ -1,4 +1,4 @@
-@use 'classicy/scss/appearance';
+@use '@classicy/appearance-platinum/scss/mixins';
 
 .pagerContent {
   display: flex;
@@ -79,7 +79,7 @@
   flex-direction: row;
   gap: var(--window-control-size);
   padding: calc(var(--window-padding-size) * 2);
-  @include appearance.platinumWindowControlBoxBorder;
+  @include mixins.platinum-window-control-box-border;
   background-color: var(--color-system-03);
   justify-content: space-between;
 }

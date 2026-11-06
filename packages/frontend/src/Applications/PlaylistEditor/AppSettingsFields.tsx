@@ -3,7 +3,7 @@ import {
 	ClassicyCheckbox,
 	ClassicyInput,
 	ClassicyPopUpMenu,
-} from "classicy";
+} from "@classicy/classicy";
 import { useState } from "react";
 import { defaultValueFor, type SettingsField, settingsFieldsOf } from "./settingsRegistry";
 

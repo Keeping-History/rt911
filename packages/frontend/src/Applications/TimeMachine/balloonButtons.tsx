@@ -25,7 +25,7 @@ import {
 	ClassicyButton,
 	type ClassicyIconBalloonHelp,
 	useClassicyBalloonHelp,
-} from "classicy";
+} from "@classicy/classicy";
 import type React from "react";
 import {
 	type ButtonHTMLAttributes,

@@ -9,7 +9,7 @@ import {
 	quitMenuItemHelper,
 	useAppManager,
 	useAppManagerDispatch,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import classNames from "classnames";
 import type React from "react";

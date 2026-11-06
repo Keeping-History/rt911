@@ -5,7 +5,7 @@
  * Fully controlled, same as `FilterTree`: it owns no checked state, just
  * renders the set it is handed and reports which picker a click asked for.
  */
-import { ClassicyBevelButton } from "classicy";
+import { ClassicyBevelButton } from "@classicy/classicy";
 import type React from "react";
 import styles from "./largeNamespaceButtons.module.scss";
 import type { TagGroup } from "./tagFilter";

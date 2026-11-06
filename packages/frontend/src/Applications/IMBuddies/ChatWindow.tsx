@@ -4,7 +4,7 @@ import {
 	ClassicyWindow,
 	useAppManagerDispatch,
 	useClassicyDateTime,
-} from "classicy";
+} from "@classicy/classicy";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { virtualUtcMs } from "../../Providers/MediaStream/virtualClock";

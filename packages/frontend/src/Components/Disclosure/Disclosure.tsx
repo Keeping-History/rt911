@@ -1,4 +1,4 @@
-import { ClassicyTriangle } from "classicy";
+import { ClassicyTriangle } from "@classicy/classicy";
 import type React from "react";
 import { type KeyboardEvent, useState } from "react";
 

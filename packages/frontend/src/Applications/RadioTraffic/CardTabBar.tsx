@@ -10,7 +10,7 @@
 // tabs region as a whole (bar above panel) instead of nesting one fixed box
 // inside another.
 
-import { ClassicyBevelButton, ClassicyButton } from "classicy";
+import { ClassicyBevelButton, ClassicyButton } from "@classicy/classicy";
 import type React from "react";
 import { useEffect, useRef } from "react";
 import type { ItemMeta } from "../../Providers/MediaStream/MediaStreamContext";

@@ -2,7 +2,7 @@ import {
 	ClassicyFileSystemEntryFileType,
 	ClassicyIcons,
 	type ClassicyFileSystemTree,
-} from "classicy";
+} from "@classicy/classicy";
 
 const NEWSPAPER_PDF_BASE_URL = "https://files.911realtime.org/pdfs/newspapers";
 

@@ -4,7 +4,7 @@ import {
 	ClassicyButton,
 	ClassicyCheckbox,
 	ClassicyPopUpMenu,
-} from "classicy";
+} from "@classicy/classicy";
 import { PINPOINTS, pinpointById } from "./mapPinpoints";
 import styles from "./FlightTracker.module.scss";
 import mapGlobePng from "./map-globe.png";

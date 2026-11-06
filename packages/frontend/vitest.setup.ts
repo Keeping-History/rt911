@@ -1,3 +1,11 @@
+// Classicy 3 draws nothing, and registers no cursors, art, fonts or sounds,
+// until an Appearance Package registers. The app imports Platinum in
+// boot/AppProviders.tsx (and Pages/PagesSite.tsx); tests get it here, so a
+// component under test sees the same registries it does in the browser. A test
+// file's vi.mock("@classicy/classicy", …) does not reach this import: it is
+// evaluated, against the real core, before the test file's mocks register.
+import "@classicy/appearance-platinum";
+
 // jsdom does not implement IntersectionObserver; react-marquee-text
 // (NowPlayingList) requires it at mount. Minimal inert stub for tests.
 class IntersectionObserverStub {

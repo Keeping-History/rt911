@@ -1,4 +1,4 @@
-import type { HCAction, HCStack } from "classicy";
+import type { HCAction, HCStack } from "@classicy/classicy";
 
 /**
  * A built-in HyperCard stack demonstrating the news/pager embeds and the

@@ -10,7 +10,7 @@ const authUser   = vi.hoisted(() => ({ current: null as AuthUser | null }));
 const formProps  = vi.hoisted(() => [] as Array<{ defaults: FeedbackDefaults }>);
 const submitted  = vi.hoisted(() => ({ github: "octocat" }));
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	ClassicyApp: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
 	ClassicyWindow: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
 	// FeedbackSuccess renders once a report goes through.

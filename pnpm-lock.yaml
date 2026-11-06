@@ -22,15 +22,18 @@ importers:
 
   packages/frontend:
     dependencies:
+      '@classicy/appearance-platinum':
+        specifier: ^3.0.0
+        version: 3.0.0(@classicy/classicy@3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@classicy/classicy':
+        specifier: ^3.0.0
+        version: 3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@msgpack/msgpack':
         specifier: ^3.1.3
         version: 3.1.3
       '@openreplay/tracker':
         specifier: ^19.0.2
         version: 19.0.2
-      classicy:
-        specifier: 2.1.8
-        version: 2.1.8(@tanstack/react-table@8.21.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/dlv@1.1.5)(@types/react@19.3.0)(immer@11.1.17)(react-dom@19.3.1(react@19.3.1))(react-player@3.4.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(zustand@5.0.15(@types/react@19.3.0)(immer@11.1.17)(react@19.3.1))
       classnames:
         specifier: ^2.5.1
         version: 2.5.1
@@ -161,6 +164,23 @@ packages:
 
   '@bufbuild/protobuf@2.14.0':
     resolution: {integrity: sha512-C3UGsiCwSprE2NKIIFA3hCDlpXTMCAXRZuEVp88L1GY36Y41+rYL5fryE+nOFhp4p4JPQvdV8PQ4DWgHgeTE+w==}
+
+  '@classicy/appearance-platinum@3.0.0':
+    resolution: {integrity: sha512-tw9T9AOPifv9VxtKC3yljZvpRpQ+Xk59FYvwGUOqqu3hUgOWCiQoZlVf1juYiW2+WrNV8NGQJkTAwJFnCd+o8Q==}
+    peerDependencies:
+      '@classicy/classicy': ^3.0.0
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+
+  '@classicy/classicy@3.0.0':
+    resolution: {integrity: sha512-rzOmE0nDLWvrP2lFa3ujkU6F6r8t39ETYm2ySjrTnR++kWs5Cb9C4gAVIdTvRuPbiSaWgWHve7Eh/+qs3oTvaw==}
+    peerDependencies:
+      '@types/react': ^18.0.0 || ^19.0.0
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   '@csstools/color-helpers@6.1.2':
     resolution: {integrity: sha512-grhRy3OKmniaAEKXMjua5z/EODX0MSqBGjunw8+j/3HQjOnahs2AGhvEOIYVUWcU6ScApbhLhVrQTX8XqrMrow==}
@@ -717,6 +737,9 @@ packages:
   '@types/google_interactive_media_ads_types@3.697.1':
     resolution: {integrity: sha512-gRjJoPKQRjjTuySHqZe8Pnu6a5B0bKbTUD2ioDLPSWlEuBaAc2p1mzUzy42SCeWkyYffo2Mnv+blUGuvVvx3dQ==}
 
+  '@types/howler@2.2.13':
+    resolution: {integrity: sha512-40+EBjqIHHrC4VShlz/7i0lBUsE3QkgzZinQQji74Hd8sBkJZUBaT7LWFLK6rcabsDOOQpoMbEJvtaFQwxOu/g==}
+
   '@types/lodash@4.17.27':
     resolution: {integrity: sha512-VenMRv/eKNrspX9v3H4dbmjsrnCOYdYBG3kxXKk3dG6X+urBGcj2Prww3xw1U5K4FV/mE4h5GbWd0szEKf+9ew==}
 
@@ -932,16 +955,6 @@ packages:
     resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
     engines: {node: '>= 20.19.0'}
 
-  classicy@2.1.8:
-    resolution: {integrity: sha512-5kBx9jKOs3HyedNHWm5aF4plileSWYvYFloNIB6yCWuT2Fj4xyJRLPs0MJHgzXp++TidYFjE9pBK65CfXCdESw==}
-    peerDependencies:
-      '@tanstack/react-table': ^8.21.3
-      immer: ^11.1.8
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
-      react-player: ^3.4.0
-      zustand: ^5.0.14
-
   classnames@2.5.1:
     resolution: {integrity: sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==}
 
@@ -1094,8 +1107,8 @@ packages:
   immediate@3.0.6:
     resolution: {integrity: sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ==}
 
-  immer@11.1.17:
-    resolution: {integrity: sha512-8Vu44Y0MuMBlTQz/jQ8HEMYNq/bBqk87MnBwYR5mC8AthfhEXidZ5aT/oA/CUqboa8THKltnD9L3xyqhU/Sy1Q==}
+  immer@11.2.9:
+    resolution: {integrity: sha512-IQ4UEtXjZjyefyWjtLEDXUSrF6T2hwjKPi6BIJl3bY/2XXW24d6cNGdXJSBOA/+KNnuiXkZY6DR0C3efolhitA==}
 
   immutable@5.1.9:
     resolution: {integrity: sha512-m8nVez3rwrgmWxtLMt1ZYXB2Lv7OKYn/disyxAlSDYAlKSlFoPPfIAmAM/M5xqL4m4C/wAPw7S2/CNaUii1Hxg==}
@@ -1761,8 +1774,8 @@ packages:
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
-  zustand@5.0.15:
-    resolution: {integrity: sha512-MpSEjRiBkA9crSYeOUH32rJC7SVqAbm0Fqcqge/bUi2PPoLcBWKOsG+C8mevmpr8TwXHBVkChbbJiyvkE+i/3A==}
+  zustand@5.0.16:
+    resolution: {integrity: sha512-Uv7e327ihlCfayfja3hDc0M64Upev1LWBKpRobdK4NyovDDPeeX4imWXc/wzC1yc6fkYPoAY/ncKVPAs2jrtQw==}
     engines: {node: '>=12.20.0'}
     peerDependencies:
       '@types/react': '>=18.0.0'
@@ -1849,6 +1862,42 @@ snapshots:
       css-tree: 3.2.1
 
   '@bufbuild/protobuf@2.14.0': {}
+
+  '@classicy/appearance-platinum@3.0.0(@classicy/classicy@3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@classicy/classicy': 3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+
+  '@classicy/classicy@3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@analytics/google-tag-manager': 0.6.0
+      '@noble/hashes': 2.4.0
+      '@plussub/srt-vtt-parser': 2.0.5
+      '@tanstack/react-table': 8.21.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@types/howler': 2.2.13
+      analytics: 0.8.19(@types/dlv@1.1.5)
+      classnames: 2.5.1
+      he: 1.2.0
+      howler: 2.2.4
+      immer: 11.2.9
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+      react-json-tree: 0.20.0(@types/react@19.3.0)(react@19.3.1)
+      react-player: 3.4.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      screenfull: 6.0.2
+      use-analytics: 1.1.0(react@19.3.1)
+      zod: 4.6.7
+      zustand: 5.0.16(@types/react@19.3.0)(immer@11.2.9)(react@19.3.1)
+    optionalDependencies:
+      '@types/react': 19.3.0
+    transitivePeerDependencies:
+      - '@svta/cml-cta'
+      - '@svta/cml-structured-field-values'
+      - '@svta/cml-utils'
+      - '@types/dlv'
+      - '@types/react-dom'
+      - use-sync-external-store
 
   '@csstools/color-helpers@6.1.2': {}
 
@@ -2235,6 +2284,8 @@ snapshots:
 
   '@types/google_interactive_media_ads_types@3.697.1': {}
 
+  '@types/howler@2.2.13': {}
+
   '@types/lodash@4.17.27': {}
 
   '@types/node@26.6.5':
@@ -2376,29 +2427,6 @@ snapshots:
     dependencies:
       readdirp: 5.1.1
     optional: true
-
-  classicy@2.1.8(@tanstack/react-table@8.21.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/dlv@1.1.5)(@types/react@19.3.0)(immer@11.1.17)(react-dom@19.3.1(react@19.3.1))(react-player@3.4.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(zustand@5.0.15(@types/react@19.3.0)(immer@11.1.17)(react@19.3.1)):
-    dependencies:
-      '@analytics/google-tag-manager': 0.6.0
-      '@noble/hashes': 2.4.0
-      '@plussub/srt-vtt-parser': 2.0.5
-      '@tanstack/react-table': 8.21.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      analytics: 0.8.19(@types/dlv@1.1.5)
-      classnames: 2.5.1
-      he: 1.2.0
-      howler: 2.2.4
-      immer: 11.1.17
-      react: 19.3.1
-      react-dom: 19.3.1(react@19.3.1)
-      react-json-tree: 0.20.0(@types/react@19.3.0)(react@19.3.1)
-      react-player: 3.4.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      screenfull: 6.0.2
-      use-analytics: 1.1.0(react@19.3.1)
-      zod: 4.6.7
-      zustand: 5.0.15(@types/react@19.3.0)(immer@11.1.17)(react@19.3.1)
-    transitivePeerDependencies:
-      - '@types/dlv'
-      - '@types/react'
 
   classnames@2.5.1: {}
 
@@ -2546,7 +2574,7 @@ snapshots:
 
   immediate@3.0.6: {}
 
-  immer@11.1.17: {}
+  immer@11.2.9: {}
 
   immutable@5.1.9: {}
 
@@ -3153,8 +3181,8 @@ snapshots:
 
   zod@4.6.7: {}
 
-  zustand@5.0.15(@types/react@19.3.0)(immer@11.1.17)(react@19.3.1):
+  zustand@5.0.16(@types/react@19.3.0)(immer@11.2.9)(react@19.3.1):
     optionalDependencies:
       '@types/react': 19.3.0
-      immer: 11.1.17
+      immer: 11.2.9
       react: 19.3.1

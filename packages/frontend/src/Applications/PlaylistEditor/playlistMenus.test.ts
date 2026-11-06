@@ -1,4 +1,4 @@
-import type { ClassicyMenuItem } from "classicy";
+import type { ClassicyMenuItem } from "@classicy/classicy";
 import { describe, expect, it, vi } from "vitest";
 import { ADD_ACTIONS } from "./addActions";
 import {

@@ -1,5 +1,5 @@
-import type { HyperCardPartProps } from "classicy";
-import { QuickTimeVideoEmbed, timeFriendly } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
+import { QuickTimeVideoEmbed, timeFriendly } from "@classicy/classicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { vttUrl } from "../../../Providers/MediaStream/MediaStreamContext";
 import {

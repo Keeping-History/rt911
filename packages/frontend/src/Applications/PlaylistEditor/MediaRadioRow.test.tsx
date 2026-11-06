@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { ClassicyIcons } from "classicy";
+import { ClassicyIcons } from "@classicy/classicy";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MediaRadioRow, type RadioEditorEntry } from "./MediaRadioRow";
 

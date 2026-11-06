@@ -4,7 +4,7 @@
 // pauses audio when the clock pauses), the active now-playing source (radio
 // station or TV channel), and the mp3 subscription; screens own their list
 // state and register scroll/select meaning via useScreenWheel.
-import { useAppManager, useClassicyDateTime } from "classicy";
+import { useAppManager, useClassicyDateTime } from "@classicy/classicy";
 import {
 	memo,
 	useCallback,

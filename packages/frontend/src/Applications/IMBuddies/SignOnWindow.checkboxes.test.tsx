@@ -16,7 +16,7 @@ afterEach(cleanup);
 // SignOnWindow.test.tsx's wholesale-mocked ClassicyCheckbox stub hardcoded
 // readOnly and so could never have caught the real component's internal
 // useState toggling on click regardless of the `disabled` prop.
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	ClassicyWindow: (props: { children?: React.ReactNode }) => <div>{props.children}</div>,
 	ClassicyButton: (props: {

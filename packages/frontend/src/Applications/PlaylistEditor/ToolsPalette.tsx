@@ -6,7 +6,7 @@ import {
 	ClassicyContextualMenu,
 	type ClassicyMenuItem,
 	ClassicyWindow,
-} from "classicy";
+} from "@classicy/classicy";
 import { useRef, useState } from "react";
 import { ADD_ACTIONS, type AddAction, runAddAction, runAddSettings } from "./addActions";
 import { playlistEditorIcons } from "./playlistIcons";

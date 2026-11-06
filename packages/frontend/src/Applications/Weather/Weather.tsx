@@ -1,7 +1,6 @@
 import {
 	ClassicyApp,
 	ClassicyButton,
-	ClassicyIcons,
 	ClassicyPopUpMenu,
 	ClassicySlider,
 	ClassicyWindow,
@@ -10,7 +9,7 @@ import {
 	useAppManager,
 	useAppManagerDispatch,
 	useClassicyDateTime,
-} from "classicy";
+} from "@classicy/classicy";
 import { manifestDescription } from "../../Components/manifestDescription";
 import { type FC, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import appIconPng from "./app.png";
@@ -43,13 +42,12 @@ const STATIONS = stationsRaw as WeatherStation[];
 
 const DEFAULT_STATION_ID = "KJFK";
 
-// This app's own icon, registered into the shared registry at
-// ClassicyIcons.applications.weather.app. registerClassicyIcons assigns
-// shallowly, so the existing applications namespace is spread in to keep
-// classicy's bundled app icons intact (same gotcha as FlightTracker.tsx).
+// This app's own icon, registered into Classicy's icon registry at
+// applications.weather.app. registerClassicyIcons deep-merges, so nothing else
+// in the tree is touched. Read it from ICONS: the ClassicyIcons constant is
+// a snapshot of the shipped tree and never shows registrations.
 const ICONS = registerClassicyIcons({
 	applications: {
-		...ClassicyIcons.applications,
 		weather: { app: appIconPng },
 	},
 });

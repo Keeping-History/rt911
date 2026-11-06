@@ -1,4 +1,4 @@
-import { ClassicyButton, ClassicyLink } from "classicy";
+import { ClassicyButton, ClassicyLink } from "@classicy/classicy";
 import type React from "react";
 import styles from "./Feedback.module.scss";
 

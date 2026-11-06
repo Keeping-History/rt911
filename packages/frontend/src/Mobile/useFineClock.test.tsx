@@ -10,7 +10,7 @@ const clockState = vi.hoisted(() => ({
 	paused: false,
 	tzOffset: -4 as number | string,
 }));
-vi.mock("classicy", async (importOriginal) => ({
+vi.mock("@classicy/classicy", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	useClassicyDateTime: () => clockState,
 }));

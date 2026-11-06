@@ -55,7 +55,7 @@ const mockDesktopDispatch = vi.hoisted(() => vi.fn());
 // exercises that path turns it on.
 const startupScreenStore = vi.hoisted(() => ({ shown: false }));
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useSoundDispatch: () => (action: { sound: string }) => mockPlaySound(action.sound),
 	ClassicySoundActionTypes: { ClassicySoundPlay: "ClassicySoundPlay" },
 	useAppManagerDispatch: () => mockDesktopDispatch,

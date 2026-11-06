@@ -23,7 +23,7 @@
 //   currentPct   the playhead over the same, 0..1 — the element's position when
 //                there is an element, the clock's when there is not (story 028).
 
-import { ClassicyBevelButton } from "classicy";
+import { ClassicyBevelButton } from "@classicy/classicy";
 import type React from "react";
 import {
 	memo,

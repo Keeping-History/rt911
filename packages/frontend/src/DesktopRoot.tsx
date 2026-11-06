@@ -11,7 +11,9 @@
 // commit, so there is never a provider-without-desktop tick. That is what
 // lets app.tsx lazy-load the whole branch and keep desktop-only code
 // (Applications, html2canvas, …) out of the phone's boot path.
-import "classicy/dist/fonts.css";
+//
+// Classicy's stylesheet and the Platinum look (CSS, fonts, art, sounds) arrive
+// with the Platinum package, which boot/AppProviders.tsx imports first.
 import { AppProviders } from "./boot/AppProviders";
 import Desktop from "./Desktop";
 

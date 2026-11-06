@@ -7,7 +7,7 @@
  * only" toggle `FlightTracker.tsx` exposes. `flight` stores an array, so this
  * picker always runs in multi-select mode.
  */
-import { ClassicyCheckbox } from "classicy";
+import { ClassicyCheckbox } from "@classicy/classicy";
 import { useCallback, useContext, useEffect } from "react";
 import { MediaStreamContext } from "../../../Providers/MediaStream/MediaStreamContext";
 import { isNotable } from "../../FlightTracker/notableFlights";

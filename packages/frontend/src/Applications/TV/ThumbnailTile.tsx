@@ -1,4 +1,4 @@
-import { useClassicyBalloonHelp } from "classicy";
+import { useClassicyBalloonHelp } from "@classicy/classicy";
 import type React from "react";
 import { useRef } from "react";
 import type { MediaItem } from "../../Providers/MediaStream/MediaStreamContext";

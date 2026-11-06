@@ -8,8 +8,8 @@ vi.mock("./PlaylistEditorProvider", () => ({
 	usePlaylistEditor: () => ctx.current,
 }));
 
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyWindow: ({ children, id }: { children?: React.ReactNode; id?: string }) => (
 		<div data-testid={`win-${id}`}>{children}</div>
 	),

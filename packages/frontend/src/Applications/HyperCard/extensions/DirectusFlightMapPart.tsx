@@ -1,5 +1,5 @@
-import type { HyperCardPartProps } from "classicy";
-import { useClassicyDateTime } from "classicy";
+import type { HyperCardPartProps } from "@classicy/classicy";
+import { useClassicyDateTime } from "@classicy/classicy";
 import { useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { MediaStreamContext, type FlightPosition } from "../../../Providers/MediaStream/MediaStreamContext";
 import { virtualUtcMs } from "../../../Providers/MediaStream/virtualClock";

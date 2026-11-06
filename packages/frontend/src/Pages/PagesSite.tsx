@@ -1,10 +1,8 @@
-import { ClassicyButton, ClassicyIcons } from "classicy";
-// Classicy styles + Platinum fonts moved out of the entry chunk (the fonts
-// alone are ~900 kB of base64 the mobile shell shouldn't parse at boot); this
-// surface uses the Classicy look, so it imports both itself — classicy.css
-// otherwise arrives via boot/AppProviders.tsx, which pages never mount.
-import "classicy/dist/classicy.css";
-import "classicy/dist/fonts.css";
+// This surface mounts neither boot/AppProviders.tsx nor ClassicyDesktop, so it
+// registers the Platinum Appearance Package itself (its look, fonts and art);
+// importing @classicy/classicy injects Classicy's own stylesheet.
+import "@classicy/appearance-platinum";
+import { ClassicyButton, ClassicyIcons, useClassicyAssetVars } from "@classicy/classicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { initGoogleAnalytics, trackPageView } from "../lib/analytics";
 import { DIRECTUS_URL } from "../lib/endpoints";
@@ -33,7 +31,13 @@ import styles from "./PagesSite.module.scss";
  * visibly wrong.
  *
  * Because the app manager is absent, the theme's CSS custom properties are
- * applied to the root element here instead — see classicyTheme.ts.
+ * applied to the root element here instead — see classicyTheme.ts — along
+ * with the registered art and cursors (`useClassicyAssetVars`), which
+ * ClassicyDesktop would otherwise publish. Classicy 3 scopes the Platinum look
+ * to `.classicyDesktop[data-classicy-appearance="platinum"]`, so the root
+ * carries that attribute too, and the `data-classicy-part` /
+ * `data-classicy-control` attributes below are what place the menu-bar
+ * clusters and window control boxes (by flex `order`).
  */
 
 /**
@@ -89,6 +93,7 @@ export default function PagesSite() {
 	// Theme variables are stable for the session; computing them once avoids
 	// re-deriving the whole map on every render.
 	const themeVars = useMemo(() => classicyThemeVars(), []);
+	const assetVars = useClassicyAssetVars();
 
 	// Back/forward must swap content rather than reloading the bundle.
 	useEffect(() => {
@@ -156,7 +161,13 @@ export default function PagesSite() {
 	}, [slug, resolvedSlug, notFound, title]);
 
 	return (
-		<div className={cx("classicyDesktop", styles.root)} style={themeVars}>
+		<div
+			// The id keeps Classicy's portals (menus, balloons) inside this root.
+			id="classicyDesktop"
+			className={cx("classicyDesktop", styles.root)}
+			data-classicy-appearance="platinum"
+			style={{ ...themeVars, ...assetVars }}
+		>
 			{/* The real desktop renders <nav class="classicyDesktopMenuBar"> wrapping
 			    a .classicyMenuWrapper around the <ul>. That wrapper is also where
 			    classicy applies --ui-font / --ui-font-size, so omitting it left the
@@ -165,7 +176,8 @@ export default function PagesSite() {
 				<div className="classicyMenuWrapper">
 					<ul className="classicyDesktopMenu">
 					<li
-						className="classicyMenuItem classicyMenuItemNoImage classicyDesktopMenuAppleMenu"
+						className="classicyMenuItem classicyMenuItemNoImage classicyDesktopMenuApple"
+						data-classicy-part="apple"
 						role="menuitem"
 						tabIndex={-1}
 					>
@@ -177,7 +189,7 @@ export default function PagesSite() {
 					</li>
 
 					{nav.length === 0 && (
-						<li className="classicyMenuItem classicyMenuItemDisabled" role="menuitem" tabIndex={-1}>
+						<li className="classicyMenuItem disabled" data-classicy-part="app" role="menuitem" tabIndex={-1}>
 							<p>(no pages)</p>
 						</li>
 					)}
@@ -192,7 +204,7 @@ export default function PagesSite() {
 					    own children.
 
 					    Classicy's show/hide rule is
-					    `.classicyMenuItemOpen > .classicyMenuWrapper > ul { display: flex }`,
+					    `.classicyMenuItem.open > .classicyMenuWrapper > ul { display: flex }`,
 					    so each submenu is always rendered and the open class drives
 					    visibility. The nesting below is what that selector requires. */}
 					{nav.map((root) => {
@@ -215,6 +227,7 @@ export default function PagesSite() {
 										// the root happens to have children.
 										containsCurrent && styles.menuCurrent,
 									)}
+									data-classicy-part="app"
 									role="menuitem"
 									tabIndex={-1}
 								>
@@ -235,8 +248,9 @@ export default function PagesSite() {
 									"classicyMenuItemChildMenuIndicator",
 									styles.menuTitle,
 									containsCurrent && styles.menuCurrent,
-									isOpen && "classicyMenuItemOpen",
+									isOpen && "open",
 								)}
+								data-classicy-part="app"
 								role="menuitem"
 								tabIndex={0}
 								aria-haspopup="menu"
@@ -293,7 +307,7 @@ export default function PagesSite() {
 					className={cx(
 						"classicyWindow",
 						"classicyWindowDocument",
-						"classicyWindowActive",
+						"active",
 						styles.window,
 						zoomed && styles.windowZoomed,
 					)}
@@ -304,7 +318,7 @@ export default function PagesSite() {
 					<div className="classicyWindowFrameEdge classicyWindowFrameEdge-left" />
 
 					<div className="classicyWindowTitleBar">
-						<div className="classicyWindowControlBox">
+						<div className="classicyWindowControlBox" data-classicy-control="close">
 							{/* A real control, not decoration: closing a page returns you
 							    to the desktop. A dead close box would be worse than none. */}
 							<div
@@ -332,7 +346,7 @@ export default function PagesSite() {
 							<div className="classicyWindowTitleRight" />
 						</div>
 
-						<div className="classicyWindowControlBox">
+						<div className="classicyWindowControlBox" data-classicy-control="zoom">
 							<div
 								className="classicyWindowZoomBox"
 								role="button"

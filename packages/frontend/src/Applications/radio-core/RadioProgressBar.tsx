@@ -1,4 +1,4 @@
-import { timeFriendly } from "classicy";
+import { timeFriendly } from "@classicy/classicy";
 import type React from "react";
 import styles from "./radio.module.scss";
 

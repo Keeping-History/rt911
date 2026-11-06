@@ -7,7 +7,7 @@ import { DEFAULT_CAPTION_STYLE } from "./radioScannerSettings";
 // once playback passes 1s, so the tests exercise the currentTime → cue mapping
 // without fetching or parsing a real VTT. (CaptionOverlay imports nothing else
 // from classicy, so a full replacement is safe here.)
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useQuickTimeSubtitles: (url?: string) => ({
 		activeCueText: (t: number) => (url && t >= 1 ? "Hello world" : null),
 	}),

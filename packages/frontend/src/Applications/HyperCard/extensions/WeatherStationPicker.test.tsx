@@ -6,8 +6,8 @@ import {
 	type MediaStreamContextValue,
 } from "../../../Providers/MediaStream/MediaStreamContext";
 
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyWindow: ({ children, id, title }: { children?: ReactNode; id?: string; title?: string }) => (
 		<div data-testid={`win-${id}`} data-title={title}>
 			{children}

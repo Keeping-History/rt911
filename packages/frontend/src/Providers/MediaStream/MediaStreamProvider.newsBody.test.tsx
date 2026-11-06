@@ -8,7 +8,7 @@ import { MediaStreamProvider } from "./MediaStreamProvider";
 // exercises requestNewsBody's de-dup logic, not clock-gated reveal/prune.
 const NOW_ISO = "2001-09-11T13:00:00.000Z";
 const FIXED_LOCAL_DATE = new Date(NOW_ISO);
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: FIXED_LOCAL_DATE,
 		dateTime: NOW_ISO,
@@ -25,6 +25,8 @@ vi.mock("classicy", () => ({
 		}),
 	useAppManagerDispatch: () => vi.fn(),
 	ClassicyIcons: { applications: {} },
+	// playlistAppMeta reads app icons through the asset registry.
+	resolveClassicyAsset: () => undefined,
 	registerApp: () => {},
 }));
 

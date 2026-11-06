@@ -1,4 +1,4 @@
-import type { ActionMessage, ClassicyStore } from "classicy";
+import type { ActionMessage, ClassicyStore } from "@classicy/classicy";
 import { describe, expect, it } from "vitest";
 import { classicyFeedbackEventHandler } from "./FeedbackContext";
 import { feedbackSetGithub, readStoredGithub } from "./feedbackSettings";

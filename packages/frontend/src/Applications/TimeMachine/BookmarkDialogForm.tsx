@@ -5,7 +5,7 @@ import {
 	ClassicyInput,
 	ClassicyPopUpMenu,
 	ClassicySpinner,
-} from "classicy";
+} from "@classicy/classicy";
 import type React from "react";
 import { useMemo, useState } from "react";
 import type { PersonalBookmarkInput } from "./bookmarksApi";

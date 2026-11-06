@@ -1,14 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ClassicyMenuItem } from "classicy";
+import type { ClassicyMenuItem } from "@classicy/classicy";
 import { PlaylistDocumentWindow } from "./PlaylistDocumentWindow";
 import type { EditorState } from "./editorState";
 
 const menus = vi.hoisted(() => ({ current: [] as ClassicyMenuItem[] }));
 const closeFns = vi.hoisted(() => ({ current: {} as Record<string, () => void> }));
 const dispatchMock = vi.fn();
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyWindow: ({ children, id, appMenu, onCloseFunc, title }: {
 		children?: React.ReactNode; id?: string; appMenu?: ClassicyMenuItem[];
 		onCloseFunc?: () => void; title?: string;

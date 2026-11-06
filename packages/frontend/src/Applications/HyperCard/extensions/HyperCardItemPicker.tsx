@@ -1,4 +1,4 @@
-import { ClassicyBevelButton, ClassicyButton, ClassicyControlLabel, ClassicyInput, ClassicyWindow } from "classicy";
+import { ClassicyBevelButton, ClassicyButton, ClassicyControlLabel, ClassicyInput, ClassicyWindow } from "@classicy/classicy";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./HyperCardItemPicker.css";

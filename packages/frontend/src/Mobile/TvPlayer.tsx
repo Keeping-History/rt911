@@ -4,7 +4,7 @@
 // only hides the picture — the <video> element never unmounts, and the audio
 // keeps playing. The shell keys this component by item id, so switching
 // channels is a clean remount with a fresh start position.
-import { QuickTimeVideoEmbed } from "classicy";
+import { QuickTimeVideoEmbed } from "@classicy/classicy";
 import { useEffect, useRef } from "react";
 import {
 	type HlsAbrApi,

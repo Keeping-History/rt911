@@ -9,7 +9,7 @@
  * have to be reconciled with the picker's, which is handed the same whole set
  * for exactly this reason.
  */
-import { ClassicyCheckbox } from "classicy";
+import { ClassicyCheckbox } from "@classicy/classicy";
 import type React from "react";
 import { Disclosure } from "../../Components/Disclosure/Disclosure";
 import styles from "./filterTree.module.scss";

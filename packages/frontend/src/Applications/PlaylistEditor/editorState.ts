@@ -1,4 +1,4 @@
-import type { ClassicyFileDialogEntry, ClassicyFileOpenSelection } from "classicy";
+import type { ClassicyFileDialogEntry, ClassicyFileOpenSelection } from "@classicy/classicy";
 import type { PlaylistRecord } from "../../Providers/Auth/playlistApi";
 import { parsePlaylist } from "../../Providers/Playlist/parsePlaylist";
 import type {

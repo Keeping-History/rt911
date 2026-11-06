@@ -1,7 +1,7 @@
 import {
 	ClassicyAlert, type ClassicyMenuItem, ClassicyWindow, getAppWindow, useAppManager,
 	useAppManagerDispatch, useClassicyDateTime,
-} from "classicy";
+} from "@classicy/classicy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deletePlaylist, duplicatePlaylist, getPlaylist, updatePlaylist } from "../../Providers/Auth/playlistApi";
 import {

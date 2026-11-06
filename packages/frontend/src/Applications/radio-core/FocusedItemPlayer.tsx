@@ -1,4 +1,4 @@
-import { ClassicyButton } from "classicy";
+import { ClassicyButton } from "@classicy/classicy";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import {

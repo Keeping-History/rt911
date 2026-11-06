@@ -9,7 +9,7 @@ import { resetMarketDataCacheForTests } from './useMarketData'
 
 const mockClock = vi.hoisted(() => ({ current: Date.parse('2001-09-10T15:00:00Z') }))
 
-vi.mock('classicy', () => ({
+vi.mock('@classicy/classicy', () => ({
     ClassicyApp: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     ClassicyWindow: ({ children, title }: { children: React.ReactNode; title: string }) => (
         <section aria-label={title}>{children}</section>

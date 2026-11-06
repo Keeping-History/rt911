@@ -1,5 +1,5 @@
 import type { FC } from "react";
-import { ClassicyCheckbox, ClassicyControlGroup } from "classicy";
+import { ClassicyCheckbox, ClassicyControlGroup } from "@classicy/classicy";
 import type { MapPoi } from "./mapPois";
 import { distinctLayers } from "./mapPois";
 import type { FlightPoiSettings } from "./flightMapSettings";

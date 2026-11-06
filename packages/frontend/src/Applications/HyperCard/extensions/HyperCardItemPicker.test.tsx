@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 // ClassicyWindow needs the app-manager store to mount — stub the two things
 // the shell is responsible for (same shape as TagPickerWindow.test.tsx).
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyWindow: ({
 		children,
 		id,

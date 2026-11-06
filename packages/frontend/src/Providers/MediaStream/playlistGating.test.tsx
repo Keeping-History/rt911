@@ -14,7 +14,7 @@ const NOW_ISO = "2001-09-11T13:00:00.000Z";
 // Single stable Date instance — a fresh reference each render would re-fire
 // the provider's per-second tick effect forever (see flights test note).
 const FIXED_LOCAL_DATE = new Date(NOW_ISO);
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	useClassicyDateTime: () => ({
 		localDate: FIXED_LOCAL_DATE,
 		dateTime: NOW_ISO,
@@ -34,6 +34,8 @@ vi.mock("classicy", () => ({
 		}),
 	useAppManagerDispatch: () => vi.fn(),
 	ClassicyIcons: { applications: {} },
+	// playlistAppMeta reads app icons through the asset registry.
+	resolveClassicyAsset: () => undefined,
 	registerApp: () => {},
 }));
 

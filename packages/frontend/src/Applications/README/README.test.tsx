@@ -7,7 +7,7 @@ const appProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 const dispatched = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 const appOpen = vi.hoisted(() => ({ current: true }));
 
-vi.mock("classicy", () => ({
+vi.mock("@classicy/classicy", () => ({
 	ClassicyApp: (props: Record<string, unknown> & { children?: React.ReactNode }) => {
 		appProps.push(props);
 		return <div>{props.children}</div>;

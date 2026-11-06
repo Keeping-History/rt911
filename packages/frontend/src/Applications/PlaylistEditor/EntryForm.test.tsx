@@ -21,8 +21,8 @@ vi.mock("./settingsRegistry", async (importOriginal) => ({
 
 // The popup menu is a custom button+listbox; a native select keeps the app
 // switch drivable with one change event while the wiring under test stays ours.
-vi.mock("classicy", async (importOriginal) => ({
-	...(await importOriginal<typeof import("classicy")>()),
+vi.mock("@classicy/classicy", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@classicy/classicy")>()),
 	ClassicyPopUpMenu: ({
 		id, label, options, selected, onChangeFunc,
 	}: {

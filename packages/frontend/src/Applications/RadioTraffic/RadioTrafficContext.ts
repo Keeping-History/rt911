@@ -16,8 +16,8 @@
 // no handler: every card click a silent no-op, the palette showing nothing
 // selected, and no way to notice why.
 
-import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerApp } from "classicy";
+import type { ActionMessage, ClassicyStore } from "@classicy/classicy";
+import { registerApp } from "@classicy/classicy";
 import { z } from "zod";
 import { sanitizeItemIds } from "../radio-core/radioPlayback";
 import type { Lane } from "./cardStatus";

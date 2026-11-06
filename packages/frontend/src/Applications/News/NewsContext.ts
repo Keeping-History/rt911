@@ -1,8 +1,8 @@
 // Cross-app remote-control API for the News app (TVContext's pattern):
 // commands and published state ride apps["News.app"].data through a handler
 // registered ahead of the core app reducer.
-import type { ActionMessage, ClassicyStore } from "classicy";
-import { registerApp } from "classicy";
+import type { ActionMessage, ClassicyStore } from "@classicy/classicy";
+import { registerApp } from "@classicy/classicy";
 import { z } from "zod";
 
 const appId = "News.app";
