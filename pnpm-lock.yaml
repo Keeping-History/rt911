@@ -23,11 +23,11 @@ importers:
   packages/frontend:
     dependencies:
       '@classicy/appearance-platinum':
-        specifier: ^3.0.0
-        version: 3.0.0(@classicy/classicy@3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: ^3.1.0
+        version: 3.1.0(@classicy/classicy@3.1.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@classicy/classicy':
-        specifier: ^3.0.0
-        version: 3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: ^3.1.0
+        version: 3.1.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@msgpack/msgpack':
         specifier: ^3.1.3
         version: 3.1.3
@@ -165,15 +165,15 @@ packages:
   '@bufbuild/protobuf@2.14.0':
     resolution: {integrity: sha512-C3UGsiCwSprE2NKIIFA3hCDlpXTMCAXRZuEVp88L1GY36Y41+rYL5fryE+nOFhp4p4JPQvdV8PQ4DWgHgeTE+w==}
 
-  '@classicy/appearance-platinum@3.0.0':
-    resolution: {integrity: sha512-tw9T9AOPifv9VxtKC3yljZvpRpQ+Xk59FYvwGUOqqu3hUgOWCiQoZlVf1juYiW2+WrNV8NGQJkTAwJFnCd+o8Q==}
+  '@classicy/appearance-platinum@3.1.0':
+    resolution: {integrity: sha512-4wcLSCCprS8Zna/WlxSwfP9YGtaYb/8mLjQ8L3/gOZByU6Hw2e1HL4+MCB1TsaTAGp02DkopYwYoY0gefxlWrg==}
     peerDependencies:
-      '@classicy/classicy': ^3.0.0
+      '@classicy/classicy': ^3.1.0
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
-  '@classicy/classicy@3.0.0':
-    resolution: {integrity: sha512-rzOmE0nDLWvrP2lFa3ujkU6F6r8t39ETYm2ySjrTnR++kWs5Cb9C4gAVIdTvRuPbiSaWgWHve7Eh/+qs3oTvaw==}
+  '@classicy/classicy@3.1.0':
+    resolution: {integrity: sha512-oQwm445XmtzhWq3VitU49VVo2ihlng0/NHOPnrDfAczwH2a3vAtddNBhHFjC2qlef0OqsIew6PE5Bd1jAPhhcA==}
     peerDependencies:
       '@types/react': ^18.0.0 || ^19.0.0
       react: ^18.0.0 || ^19.0.0
@@ -1774,8 +1774,8 @@ packages:
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
-  zustand@5.0.16:
-    resolution: {integrity: sha512-Uv7e327ihlCfayfja3hDc0M64Upev1LWBKpRobdK4NyovDDPeeX4imWXc/wzC1yc6fkYPoAY/ncKVPAs2jrtQw==}
+  zustand@5.1.0:
+    resolution: {integrity: sha512-ciJZlP48M1PTQbVQq81CGVFxHTLpZNrFjKqwjtCU34AWuXTZT/jrF3p9+fI84Cf1eSCMLapxqBy/SNTfwOBuqA==}
     engines: {node: '>=12.20.0'}
     peerDependencies:
       '@types/react': '>=18.0.0'
@@ -1863,13 +1863,14 @@ snapshots:
 
   '@bufbuild/protobuf@2.14.0': {}
 
-  '@classicy/appearance-platinum@3.0.0(@classicy/classicy@3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@classicy/appearance-platinum@3.1.0(@classicy/classicy@3.1.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
-      '@classicy/classicy': 3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@classicy/classicy': 3.1.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
+      zod: 4.6.7
 
-  '@classicy/classicy@3.0.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@classicy/classicy@3.1.0(@svta/cml-cta@1.0.6(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0))(@svta/cml-structured-field-values@1.1.3(@svta/cml-utils@1.5.0))(@svta/cml-utils@1.5.0)(@types/dlv@1.1.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@analytics/google-tag-manager': 0.6.0
       '@noble/hashes': 2.4.0
@@ -1888,7 +1889,7 @@ snapshots:
       screenfull: 6.0.2
       use-analytics: 1.1.0(react@19.3.1)
       zod: 4.6.7
-      zustand: 5.0.16(@types/react@19.3.0)(immer@11.2.9)(react@19.3.1)
+      zustand: 5.1.0(@types/react@19.3.0)(immer@11.2.9)(react@19.3.1)
     optionalDependencies:
       '@types/react': 19.3.0
     transitivePeerDependencies:
@@ -3181,7 +3182,7 @@ snapshots:
 
   zod@4.6.7: {}
 
-  zustand@5.0.16(@types/react@19.3.0)(immer@11.2.9)(react@19.3.1):
+  zustand@5.1.0(@types/react@19.3.0)(immer@11.2.9)(react@19.3.1):
     optionalDependencies:
       '@types/react': 19.3.0
       immer: 11.2.9
