@@ -6,7 +6,7 @@
 # fetches Tracy via CPM at configure time, so this stage needs network + git.
 # MARCH_NATIVE is OFF — the binaries must run on the encode node, not just the
 # CI builder's CPU.
-FROM python:3.14-slim AS uat-builder
+FROM python:3.15-slim AS uat-builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git ca-certificates build-essential pkg-config \
         libcurl4-openssl-dev libssl-dev libicu-dev libncurses-dev \
@@ -37,7 +37,7 @@ RUN cd usenetarchive && \
 # iGPU (RADV). MARCH_NATIVE stays off — the binary must run on the encode node,
 # not the CI builder. The medium.en ggml model is fetched here and copied into
 # the runtime image at /opt/models (deterministic; no runtime network fetch).
-FROM python:3.14-slim AS whisper-builder
+FROM python:3.15-slim AS whisper-builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git ca-certificates curl build-essential cmake \
         libvulkan-dev glslc spirv-headers \
@@ -79,7 +79,7 @@ RUN curl -fsSL -o /build/deep-filter \
     /build/deep-filter --help > /dev/null
 
 # ---- runtime image ---------------------------------------------------------
-FROM python:3.14-slim
+FROM python:3.15-slim
 # ffmpeg + the VAAPI runtime (video encode path) plus the shared libs the
 # usenetarchive binaries link against. The dev packages are installed (not just
 # the versioned runtime libs) so the soname versions match the builder's without
