@@ -1,0 +1,6480 @@
+{
+	"name": "The Oregon Trail",
+	"version": "2",
+	"size": [
+		512,
+		360
+	],
+	"variables": {
+		"money": 0,
+		"mult": 1,
+		"prof": "Banker",
+		"oxen": 0,
+		"food": 0,
+		"clothes": 0,
+		"ammo": 0,
+		"parts": 0,
+		"health": 100,
+		"people": 5,
+		"miles": 0,
+		"day": 1,
+		"pace": "Steady",
+		"ration": "Filling",
+		"river": 3,
+		"healthWord": "Good"
+	},
+	"backgrounds": [
+		{
+			"id": "plain",
+			"parts": [
+				{
+					"id": "plainFooter",
+					"type": "label",
+					"rect": [
+						12,
+						336,
+						488,
+						18
+					],
+					"content": "The Oregon Trail  ·  a Classicy HyperCard stack",
+					"style": {
+						"align": "center",
+						"fontSize": "small"
+					}
+				}
+			]
+		},
+		{
+			"id": "trail",
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "if",
+						"condition": "health >= 80",
+						"then": [
+							{
+								"do": "put",
+								"value": "\"Good\"",
+								"var": "healthWord"
+							}
+						],
+						"else": [
+							{
+								"do": "if",
+								"condition": "health >= 55",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Fair\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 30",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Poor\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "\"Very Poor\"",
+												"var": "healthWord"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"do": "put",
+						"field": "sbInfo",
+						"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+					},
+					{
+						"do": "put",
+						"field": "sbSupplies",
+						"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+					}
+				]
+			},
+			"parts": [
+				{
+					"id": "sbRule",
+					"type": "label",
+					"rect": [
+						12,
+						300,
+						488,
+						16
+					],
+					"content": "──────────────────────────────────────────────────────────",
+					"style": {
+						"align": "center",
+						"fontSize": "small"
+					}
+				},
+				{
+					"id": "sbInfo",
+					"type": "label",
+					"rect": [
+						12,
+						316,
+						344,
+						16
+					],
+					"content": "",
+					"style": {
+						"fontSize": "small"
+					},
+					"shared": true
+				},
+				{
+					"id": "sbSupplies",
+					"type": "label",
+					"rect": [
+						12,
+						336,
+						344,
+						16
+					],
+					"content": "",
+					"style": {
+						"fontSize": "small"
+					},
+					"shared": true
+				},
+				{
+					"id": "sbPace",
+					"type": "button",
+					"name": "Pace…",
+					"rect": [
+						364,
+						314,
+						66,
+						20
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "answer",
+								"message": "Set the pace for the trail. A harder pace covers ground faster but tires the party.",
+								"buttons": [
+									"Steady",
+									"Strenuous",
+									"Grueling"
+								],
+								"var": "pace"
+							},
+							{
+								"do": "if",
+								"condition": "health >= 80",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Good\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 55",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Fair\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "health >= 30",
+												"then": [
+													{
+														"do": "put",
+														"value": "\"Poor\"",
+														"var": "healthWord"
+													}
+												],
+												"else": [
+													{
+														"do": "put",
+														"value": "\"Very Poor\"",
+														"var": "healthWord"
+													}
+												]
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "put",
+								"field": "sbInfo",
+								"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+							},
+							{
+								"do": "put",
+								"field": "sbSupplies",
+								"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+							}
+						]
+					}
+				},
+				{
+					"id": "sbRation",
+					"type": "button",
+					"name": "Food…",
+					"rect": [
+						364,
+						336,
+						66,
+						20
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "answer",
+								"message": "How much food should each person get?",
+								"buttons": [
+									"Filling",
+									"Meager",
+									"Bare only"
+								],
+								"var": "ration"
+							},
+							{
+								"do": "if",
+								"condition": "health >= 80",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Good\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 55",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Fair\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "health >= 30",
+												"then": [
+													{
+														"do": "put",
+														"value": "\"Poor\"",
+														"var": "healthWord"
+													}
+												],
+												"else": [
+													{
+														"do": "put",
+														"value": "\"Very Poor\"",
+														"var": "healthWord"
+													}
+												]
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "put",
+								"field": "sbInfo",
+								"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+							},
+							{
+								"do": "put",
+								"field": "sbSupplies",
+								"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+							}
+						]
+					}
+				},
+				{
+					"id": "sbHint",
+					"type": "label",
+					"rect": [
+						436,
+						316,
+						72,
+						32
+					],
+					"content": "click to change",
+					"style": {
+						"fontSize": "small"
+					}
+				}
+			]
+		}
+	],
+	"cards": [
+		{
+			"id": "title",
+			"name": "Title",
+			"background": "plain",
+			"parts": [
+				{
+					"id": "tTitle",
+					"type": "label",
+					"rect": [
+						12,
+						40,
+						488,
+						30
+					],
+					"content": "The Oregon Trail",
+					"style": {
+						"align": "center",
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "tSub",
+					"type": "label",
+					"rect": [
+						12,
+						78,
+						488,
+						20
+					],
+					"content": "Independence, Missouri  ·  1848",
+					"style": {
+						"align": "center"
+					}
+				},
+				{
+					"id": "tBlurb",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						66,
+						112,
+						380,
+						120
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "It is 1848. Gold is discovered in California, but you and your family have set your sights on the rich farmland of Oregon's Willamette Valley — 2,000 miles of prairie, river and mountain away.\n\nStock your wagon wisely, choose your pace, and try to reach Oregon before the winter snows close the mountain passes."
+				},
+				{
+					"id": "tBegin",
+					"type": "button",
+					"name": "Begin the Journey",
+					"rect": [
+						176,
+						250,
+						160,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "put",
+								"value": "0",
+								"var": "miles"
+							},
+							{
+								"do": "put",
+								"value": "1",
+								"var": "day"
+							},
+							{
+								"do": "put",
+								"value": "100",
+								"var": "health"
+							},
+							{
+								"do": "put",
+								"value": "5",
+								"var": "people"
+							},
+							{
+								"do": "put",
+								"value": "0",
+								"var": "oxen"
+							},
+							{
+								"do": "put",
+								"value": "0",
+								"var": "food"
+							},
+							{
+								"do": "put",
+								"value": "0",
+								"var": "clothes"
+							},
+							{
+								"do": "put",
+								"value": "0",
+								"var": "ammo"
+							},
+							{
+								"do": "put",
+								"value": "0",
+								"var": "parts"
+							},
+							{
+								"do": "put",
+								"value": "0",
+								"var": "money"
+							},
+							{
+								"do": "put",
+								"value": "1",
+								"var": "mult"
+							},
+							{
+								"do": "put",
+								"value": "\"Steady\"",
+								"var": "pace"
+							},
+							{
+								"do": "put",
+								"value": "\"Filling\"",
+								"var": "ration"
+							},
+							{
+								"do": "put",
+								"value": "3",
+								"var": "river"
+							},
+							{
+								"do": "visual",
+								"effect": "dissolve"
+							},
+							{
+								"do": "go",
+								"to": "intro"
+							}
+						]
+					}
+				},
+				{
+					"id": "tAbout",
+					"type": "button",
+					"name": "About This Game",
+					"rect": [
+						196,
+						288,
+						120,
+						24
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "visual",
+								"effect": "iris"
+							},
+							{
+								"do": "go",
+								"to": "about"
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "about",
+			"name": "About",
+			"background": "plain",
+			"parts": [
+				{
+					"id": "aTitle",
+					"type": "label",
+					"rect": [
+						12,
+						20,
+						488,
+						24
+					],
+					"content": "About The Oregon Trail",
+					"style": {
+						"align": "center",
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "aBody",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						40,
+						56,
+						432,
+						244
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "The Oregon Trail is one of the most beloved educational games ever made. First written in 1971 by student teachers in Minnesota and published for the Apple II by MECC, it taught a generation of schoolchildren about the hardships of 19th-century pioneer life — supply planning, geography, and hard trade-offs — while they tried, and very often failed, to reach Oregon alive.\n\nThis is a faithful re-creation for the Classicy desktop, written entirely as a portable HyperCard JSON stack: no code, just cards, buttons, and declarative actions. Outfit your wagon, then manage food, health and money across the trail. Every outcome here is determined by your own choices and supplies — plan well and you will arrive.\n\nGood luck. And try not to die of dysentery."
+				},
+				{
+					"id": "aBack",
+					"type": "button",
+					"name": "Back",
+					"rect": [
+						216,
+						306,
+						80,
+						24
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "visual",
+								"effect": "iris"
+							},
+							{
+								"do": "go",
+								"to": "title"
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "intro",
+			"name": "Choose a Profession",
+			"background": "plain",
+			"parts": [
+				{
+					"id": "iTitle",
+					"type": "label",
+					"rect": [
+						12,
+						20,
+						488,
+						24
+					],
+					"content": "Who are you?",
+					"style": {
+						"align": "center",
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "iBody",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						40,
+						52,
+						432,
+						96
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "Your profession sets how much money you start with — and how hard the journey scores. A wealthy banker travels in comfort but earns the fewest points; a farmer starts with almost nothing, yet a farmer who reaches Oregon is honored most of all."
+				},
+				{
+					"id": "iBanker",
+					"type": "button",
+					"name": "Banker  ·  $1600",
+					"rect": [
+						40,
+						162,
+						200,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "put",
+								"value": "1600",
+								"var": "money"
+							},
+							{
+								"do": "put",
+								"value": "1",
+								"var": "mult"
+							},
+							{
+								"do": "put",
+								"value": "\"Banker\"",
+								"var": "prof"
+							},
+							{
+								"do": "visual",
+								"effect": "dissolve"
+							},
+							{
+								"do": "go",
+								"to": "month"
+							}
+						]
+					}
+				},
+				{
+					"id": "iCarpenter",
+					"type": "button",
+					"name": "Carpenter  ·  $800",
+					"rect": [
+						272,
+						162,
+						200,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "put",
+								"value": "800",
+								"var": "money"
+							},
+							{
+								"do": "put",
+								"value": "2",
+								"var": "mult"
+							},
+							{
+								"do": "put",
+								"value": "\"Carpenter\"",
+								"var": "prof"
+							},
+							{
+								"do": "visual",
+								"effect": "dissolve"
+							},
+							{
+								"do": "go",
+								"to": "month"
+							}
+						]
+					}
+				},
+				{
+					"id": "iFarmer",
+					"type": "button",
+					"name": "Farmer  ·  $400",
+					"rect": [
+						156,
+						208,
+						200,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "put",
+								"value": "400",
+								"var": "money"
+							},
+							{
+								"do": "put",
+								"value": "3",
+								"var": "mult"
+							},
+							{
+								"do": "put",
+								"value": "\"Farmer\"",
+								"var": "prof"
+							},
+							{
+								"do": "visual",
+								"effect": "dissolve"
+							},
+							{
+								"do": "go",
+								"to": "month"
+							}
+						]
+					}
+				},
+				{
+					"id": "iScore",
+					"type": "label",
+					"rect": [
+						12,
+						250,
+						488,
+						20
+					],
+					"content": "Score multiplier:  Banker ×1     Carpenter ×2     Farmer ×3",
+					"style": {
+						"align": "center",
+						"fontSize": "small"
+					}
+				}
+			]
+		},
+		{
+			"id": "month",
+			"name": "When to Leave",
+			"background": "plain",
+			"parts": [
+				{
+					"id": "mTitle",
+					"type": "label",
+					"rect": [
+						12,
+						20,
+						488,
+						24
+					],
+					"content": "When will you set out?",
+					"style": {
+						"align": "center",
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "mBody",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						40,
+						52,
+						432,
+						100
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "Timing is everything. Leave too early and the spring rivers run high and dangerous from snowmelt. Leave too late and you risk being trapped by snow in the mountains. Seasoned guides recommend May."
+				},
+				{
+					"id": "mMarch",
+					"type": "button",
+					"name": "March  —  rivers high",
+					"rect": [
+						40,
+						168,
+						200,
+						28
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "put",
+								"value": "6",
+								"var": "river"
+							},
+							{
+								"do": "put",
+								"value": "\"March\"",
+								"var": "monthNote"
+							},
+							{
+								"do": "visual",
+								"effect": "dissolve"
+							},
+							{
+								"do": "go",
+								"to": "store"
+							}
+						]
+					}
+				},
+				{
+					"id": "mApril",
+					"type": "button",
+					"name": "April  —  rivers rising",
+					"rect": [
+						272,
+						168,
+						200,
+						28
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "put",
+								"value": "4",
+								"var": "river"
+							},
+							{
+								"do": "put",
+								"value": "\"April\"",
+								"var": "monthNote"
+							},
+							{
+								"do": "visual",
+								"effect": "dissolve"
+							},
+							{
+								"do": "go",
+								"to": "store"
+							}
+						]
+					}
+				},
+				{
+					"id": "mMay",
+					"type": "button",
+					"name": "May  —  the wise choice",
+					"rect": [
+						156,
+						210,
+						200,
+						28
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "put",
+								"value": "3",
+								"var": "river"
+							},
+							{
+								"do": "put",
+								"value": "\"May\"",
+								"var": "monthNote"
+							},
+							{
+								"do": "visual",
+								"effect": "dissolve"
+							},
+							{
+								"do": "go",
+								"to": "store"
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "store",
+			"name": "Matt's General Store",
+			"background": "plain",
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "put",
+						"field": "storeBudget",
+						"value": "\"Money in your pocket:  $\" & money"
+					},
+					{
+						"do": "put",
+						"field": "storeCart",
+						"value": "\"Oxen \" & oxen & \"     Food \" & food & \" lbs     Clothing \" & clothes & \"     Ammunition \" & ammo & \" boxes     Spare parts \" & parts"
+					}
+				]
+			},
+			"parts": [
+				{
+					"id": "stTitle",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "Matt's General Store — Independence, Missouri",
+					"style": {
+						"align": "center",
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "storeBudget",
+					"type": "label",
+					"rect": [
+						12,
+						40,
+						488,
+						18
+					],
+					"content": "",
+					"style": {
+						"align": "center"
+					}
+				},
+				{
+					"id": "stAdvice",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						62,
+						488,
+						40
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "Buy a yoke of oxen (you need at least one to pull the wagon), plenty of food, warm clothing for the mountains, ammunition for hunting, and spare parts for breakdowns."
+				},
+				{
+					"id": "stOxen",
+					"type": "button",
+					"name": "Yoke of oxen  ·  $80",
+					"rect": [
+						24,
+						112,
+						156,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "money >= 80",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "80",
+										"var": "money"
+									},
+									{
+										"do": "add",
+										"value": "2",
+										"var": "oxen"
+									},
+									{
+										"do": "put",
+										"field": "storeBudget",
+										"value": "\"Money in your pocket:  $\" & money"
+									},
+									{
+										"do": "put",
+										"field": "storeCart",
+										"value": "\"Oxen \" & oxen & \"     Food \" & food & \" lbs     Clothing \" & clothes & \"     Ammunition \" & ammo & \" boxes     Spare parts \" & parts"
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You don't have enough money for that.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "stFood",
+					"type": "button",
+					"name": "100 lbs food  ·  $20",
+					"rect": [
+						188,
+						112,
+						156,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "money >= 20",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "20",
+										"var": "money"
+									},
+									{
+										"do": "add",
+										"value": "100",
+										"var": "food"
+									},
+									{
+										"do": "put",
+										"field": "storeBudget",
+										"value": "\"Money in your pocket:  $\" & money"
+									},
+									{
+										"do": "put",
+										"field": "storeCart",
+										"value": "\"Oxen \" & oxen & \"     Food \" & food & \" lbs     Clothing \" & clothes & \"     Ammunition \" & ammo & \" boxes     Spare parts \" & parts"
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You don't have enough money for that.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "stClothes",
+					"type": "button",
+					"name": "Set of clothing  ·  $10",
+					"rect": [
+						352,
+						112,
+						156,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "money >= 10",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "10",
+										"var": "money"
+									},
+									{
+										"do": "add",
+										"value": "1",
+										"var": "clothes"
+									},
+									{
+										"do": "put",
+										"field": "storeBudget",
+										"value": "\"Money in your pocket:  $\" & money"
+									},
+									{
+										"do": "put",
+										"field": "storeCart",
+										"value": "\"Oxen \" & oxen & \"     Food \" & food & \" lbs     Clothing \" & clothes & \"     Ammunition \" & ammo & \" boxes     Spare parts \" & parts"
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You don't have enough money for that.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "stAmmo",
+					"type": "button",
+					"name": "Box of ammo (20)  ·  $10",
+					"rect": [
+						24,
+						152,
+						156,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "money >= 10",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "10",
+										"var": "money"
+									},
+									{
+										"do": "add",
+										"value": "1",
+										"var": "ammo"
+									},
+									{
+										"do": "put",
+										"field": "storeBudget",
+										"value": "\"Money in your pocket:  $\" & money"
+									},
+									{
+										"do": "put",
+										"field": "storeCart",
+										"value": "\"Oxen \" & oxen & \"     Food \" & food & \" lbs     Clothing \" & clothes & \"     Ammunition \" & ammo & \" boxes     Spare parts \" & parts"
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You don't have enough money for that.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "stParts",
+					"type": "button",
+					"name": "Spare wagon part  ·  $15",
+					"rect": [
+						188,
+						152,
+						156,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "money >= 15",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "15",
+										"var": "money"
+									},
+									{
+										"do": "add",
+										"value": "1",
+										"var": "parts"
+									},
+									{
+										"do": "put",
+										"field": "storeBudget",
+										"value": "\"Money in your pocket:  $\" & money"
+									},
+									{
+										"do": "put",
+										"field": "storeCart",
+										"value": "\"Oxen \" & oxen & \"     Food \" & food & \" lbs     Clothing \" & clothes & \"     Ammunition \" & ammo & \" boxes     Spare parts \" & parts"
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You don't have enough money for that.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "storeCart",
+					"type": "label",
+					"rect": [
+						12,
+						250,
+						488,
+						18
+					],
+					"content": "",
+					"style": {
+						"align": "center",
+						"fontSize": "small"
+					}
+				},
+				{
+					"id": "stDepart",
+					"type": "button",
+					"name": "Load Up & Hit the Trail →",
+					"rect": [
+						136,
+						288,
+						240,
+						30
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "oxen < 2",
+								"then": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You need at least one yoke of oxen (2) to pull the wagon.",
+										"buttons": [
+											"OK"
+										]
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "food < 1",
+										"then": [
+											{
+												"do": "beep"
+											},
+											{
+												"do": "answer",
+												"message": "You'll starve with no food. Buy some provisions first.",
+												"buttons": [
+													"OK"
+												]
+											}
+										],
+										"else": [
+											{
+												"do": "answer",
+												"message": "The wagon is loaded and the oxen are yoked. Westward, ho!",
+												"buttons": [
+													"Depart"
+												]
+											},
+											{
+												"do": "visual",
+												"effect": "iris"
+											},
+											{
+												"do": "go",
+												"to": "kansasRiver"
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "kansasRiver",
+			"name": "Kansas River",
+			"background": "trail",
+			"parts": [
+				{
+					"id": "kansasRiverT",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "The Kansas River Crossing",
+					"style": {
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "kansasRiverB",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						42,
+						488,
+						90
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "You reach the The Kansas River Crossing. The Kansas River is wide and muddy, swollen with the season's runoff.\n\nHow will you get the wagon across?"
+				},
+				{
+					"id": "kansasRiverFord",
+					"type": "button",
+					"name": "Ford the river",
+					"rect": [
+						12,
+						142,
+						150,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "river <= 3",
+								"then": [
+									{
+										"do": "answer",
+										"message": "The water is low and slow. You ford the river without trouble.",
+										"buttons": [
+											"Good"
+										]
+									}
+								],
+								"else": [
+									{
+										"do": "subtract",
+										"value": "120",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "10",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The current is deep and swift! The wagon nearly tips and supplies wash downstream.",
+										"buttons": [
+											"Disaster"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "140",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "bigBlue"
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "kansasRiverCaulk",
+					"type": "button",
+					"name": "Caulk & float",
+					"rect": [
+						176,
+						142,
+						150,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "river <= 4",
+								"then": [
+									{
+										"do": "answer",
+										"message": "You seal the wagon bed with pitch and float across smoothly.",
+										"buttons": [
+											"Nice"
+										]
+									}
+								],
+								"else": [
+									{
+										"do": "subtract",
+										"value": "60",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "5",
+										"var": "health"
+									},
+									{
+										"do": "answer",
+										"message": "Water seeps in and some food spoils, but you reach the far bank.",
+										"buttons": [
+											"Phew"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "140",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "bigBlue"
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "kansasRiverFerry",
+					"type": "button",
+					"name": "Take the ferry ($20)",
+					"rect": [
+						340,
+						142,
+						160,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "money >= 20",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "20",
+										"var": "money"
+									},
+									{
+										"do": "add",
+										"value": "5",
+										"var": "day"
+									},
+									{
+										"do": "answer",
+										"message": "You pay the ferryman $20. Safe and dry — though you wait a few days for your turn.",
+										"buttons": [
+											"Worth it"
+										]
+									},
+									{
+										"do": "if",
+										"condition": "ration = \"Filling\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 10",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "ration = \"Meager\"",
+												"then": [
+													{
+														"do": "put",
+														"value": "people * 7",
+														"var": "foodUse"
+													}
+												],
+												"else": [
+													{
+														"do": "put",
+														"value": "people * 4",
+														"var": "foodUse"
+													}
+												]
+											}
+										]
+									},
+									{
+										"do": "if",
+										"condition": "pace = \"Grueling\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 2",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "8",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "8",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "pace = \"Strenuous\"",
+												"then": [
+													{
+														"do": "subtract",
+														"value": "people * 1",
+														"var": "foodUse"
+													},
+													{
+														"do": "add",
+														"value": "11",
+														"var": "day"
+													},
+													{
+														"do": "subtract",
+														"value": "4",
+														"var": "health"
+													}
+												],
+												"else": [
+													{
+														"do": "add",
+														"value": "14",
+														"var": "day"
+													}
+												]
+											}
+										]
+									},
+									{
+										"do": "if",
+										"condition": "ration = \"Filling\"",
+										"then": [
+											{
+												"do": "add",
+												"value": "3",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "ration = \"Bare only\"",
+												"then": [
+													{
+														"do": "subtract",
+														"value": "5",
+														"var": "health"
+													}
+												],
+												"else": []
+											}
+										]
+									},
+									{
+										"do": "subtract",
+										"value": "foodUse",
+										"var": "food"
+									},
+									{
+										"do": "if",
+										"condition": "food < 0",
+										"then": [
+											{
+												"do": "put",
+												"value": "0",
+												"var": "food"
+											},
+											{
+												"do": "subtract",
+												"value": "18",
+												"var": "health"
+											},
+											{
+												"do": "beep"
+											},
+											{
+												"do": "answer",
+												"message": "The food is gone. Your party goes hungry and grows weak.",
+												"buttons": [
+													"On we go"
+												]
+											}
+										]
+									},
+									{
+										"do": "if",
+										"condition": "health > 100",
+										"then": [
+											{
+												"do": "put",
+												"value": "100",
+												"var": "health"
+											}
+										]
+									},
+									{
+										"do": "add",
+										"value": "140",
+										"var": "miles"
+									},
+									{
+										"do": "if",
+										"condition": "health <= 0 or people <= 0",
+										"then": [
+											{
+												"do": "put",
+												"value": "0",
+												"var": "health"
+											},
+											{
+												"do": "go",
+												"to": "died"
+											}
+										],
+										"else": [
+											{
+												"do": "visual",
+												"effect": "wipeLeft"
+											},
+											{
+												"do": "go",
+												"to": "bigBlue"
+											}
+										]
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You can't afford the $20 ferry fee.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "kansasRiverWait",
+					"type": "button",
+					"name": "Wait for better conditions",
+					"rect": [
+						12,
+						178,
+						250,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "add",
+								"value": "6",
+								"var": "day"
+							},
+							{
+								"do": "subtract",
+								"value": "people * 3",
+								"var": "food"
+							},
+							{
+								"do": "put",
+								"value": "2",
+								"var": "river"
+							},
+							{
+								"do": "answer",
+								"message": "You make camp and wait. After several days the river drops, and you ford it safely.",
+								"buttons": [
+									"Onward"
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "140",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "bigBlue"
+									}
+								]
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "bigBlue",
+			"name": "Fort Kearny",
+			"background": "trail",
+			"parts": [
+				{
+					"id": "bigBlueT",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "Fort Kearny, Nebraska Territory",
+					"style": {
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "bigBlueB",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						42,
+						488,
+						96
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "You roll into Fort Kearny beside the Platte River — a welcome sight after the open prairie. Here you can rest, hunt buffalo, or press on along the Great Platte River Road."
+				},
+				{
+					"id": "bigBlueHunt",
+					"type": "button",
+					"name": "Go hunting",
+					"rect": [
+						12,
+						148,
+						150,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "ammo >= 1",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "1",
+										"var": "ammo"
+									},
+									{
+										"do": "add",
+										"value": "110",
+										"var": "food"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You spend a box of ammunition and bring back about 110 lbs of meat.",
+										"buttons": [
+											"Good eating"
+										]
+									},
+									{
+										"do": "if",
+										"condition": "health >= 80",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Good\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "health >= 55",
+												"then": [
+													{
+														"do": "put",
+														"value": "\"Fair\"",
+														"var": "healthWord"
+													}
+												],
+												"else": [
+													{
+														"do": "if",
+														"condition": "health >= 30",
+														"then": [
+															{
+																"do": "put",
+																"value": "\"Poor\"",
+																"var": "healthWord"
+															}
+														],
+														"else": [
+															{
+																"do": "put",
+																"value": "\"Very Poor\"",
+																"var": "healthWord"
+															}
+														]
+													}
+												]
+											}
+										]
+									},
+									{
+										"do": "put",
+										"field": "sbInfo",
+										"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+									},
+									{
+										"do": "put",
+										"field": "sbSupplies",
+										"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You are out of ammunition — nothing to hunt with.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "bigBlueRest",
+					"type": "button",
+					"name": "Rest a few days",
+					"rect": [
+						176,
+						148,
+						150,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "add",
+								"value": "12",
+								"var": "health"
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "4",
+								"var": "day"
+							},
+							{
+								"do": "subtract",
+								"value": "people * 4",
+								"var": "food"
+							},
+							{
+								"do": "answer",
+								"message": "You make camp and rest. The party recovers some strength.",
+								"buttons": [
+									"Ready"
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health >= 80",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Good\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 55",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Fair\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "health >= 30",
+												"then": [
+													{
+														"do": "put",
+														"value": "\"Poor\"",
+														"var": "healthWord"
+													}
+												],
+												"else": [
+													{
+														"do": "put",
+														"value": "\"Very Poor\"",
+														"var": "healthWord"
+													}
+												]
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "put",
+								"field": "sbInfo",
+								"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+							},
+							{
+								"do": "put",
+								"field": "sbSupplies",
+								"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+							}
+						]
+					}
+				},
+				{
+					"id": "bigBlueGo",
+					"type": "button",
+					"name": "Continue on the trail →",
+					"rect": [
+						12,
+						214,
+						250,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "250",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "chimneyRock"
+									}
+								]
+							}
+						]
+					}
+				}
+			],
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "if",
+						"condition": "health <= 55",
+						"then": [
+							{
+								"do": "subtract",
+								"value": "12",
+								"var": "health"
+							},
+							{
+								"do": "beep"
+							},
+							{
+								"do": "answer",
+								"message": "Bad water sickens the party — dysentery. The weakened travelers will slow you down.",
+								"buttons": [
+									"Rest soon"
+								]
+							}
+						],
+						"else": []
+					},
+					{
+						"do": "if",
+						"condition": "health >= 80",
+						"then": [
+							{
+								"do": "put",
+								"value": "\"Good\"",
+								"var": "healthWord"
+							}
+						],
+						"else": [
+							{
+								"do": "if",
+								"condition": "health >= 55",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Fair\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 30",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Poor\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "\"Very Poor\"",
+												"var": "healthWord"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"do": "put",
+						"field": "sbInfo",
+						"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+					},
+					{
+						"do": "put",
+						"field": "sbSupplies",
+						"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+					}
+				]
+			}
+		},
+		{
+			"id": "chimneyRock",
+			"name": "Chimney Rock",
+			"background": "trail",
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "answer",
+						"message": "Chimney Rock towers 300 feet over the plains — a famous landmark, meaning you are making progress. Then… CRACK! A wagon wheel splinters on the rocky ground.",
+						"buttons": [
+							"Uh oh"
+						]
+					},
+					{
+						"do": "if",
+						"condition": "parts >= 1",
+						"then": [
+							{
+								"do": "subtract",
+								"value": "1",
+								"var": "parts"
+							},
+							{
+								"do": "answer",
+								"message": "Luckily you carry a spare. You fit the new wheel and roll on.",
+								"buttons": [
+									"Fixed"
+								]
+							}
+						],
+						"else": [
+							{
+								"do": "subtract",
+								"value": "8",
+								"var": "health"
+							},
+							{
+								"do": "add",
+								"value": "5",
+								"var": "day"
+							},
+							{
+								"do": "beep"
+							},
+							{
+								"do": "answer",
+								"message": "With no spare part, you lose precious days improvising a repair from scrap.",
+								"buttons": [
+									"Rats"
+								]
+							}
+						]
+					},
+					{
+						"do": "if",
+						"condition": "health >= 80",
+						"then": [
+							{
+								"do": "put",
+								"value": "\"Good\"",
+								"var": "healthWord"
+							}
+						],
+						"else": [
+							{
+								"do": "if",
+								"condition": "health >= 55",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Fair\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 30",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Poor\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "\"Very Poor\"",
+												"var": "healthWord"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"do": "put",
+						"field": "sbInfo",
+						"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+					},
+					{
+						"do": "put",
+						"field": "sbSupplies",
+						"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+					}
+				]
+			},
+			"parts": [
+				{
+					"id": "crT",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "Chimney Rock",
+					"style": {
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "crB",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						42,
+						488,
+						150
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "The great stone spire of Chimney Rock marks the end of the plains and the start of harder country ahead. Emigrants for decades carved their names in the soft rock at its base.\n\nBeyond lies Fort Laramie, the last real chance to resupply before the mountains."
+				},
+				{
+					"id": "crGo",
+					"type": "button",
+					"name": "Continue to Fort Laramie →",
+					"rect": [
+						12,
+						214,
+						250,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "220",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "fortLaramie"
+									}
+								]
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "fortLaramie",
+			"name": "Fort Laramie",
+			"background": "trail",
+			"parts": [
+				{
+					"id": "fortLaramieT",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "Fort Laramie, Wyoming Territory",
+					"style": {
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "fortLaramieB",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						42,
+						488,
+						96
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "Fort Laramie is the last major outpost before the Rockies. Traders, trappers and other emigrant families crowd the stockade. Rest, hunt, trade for supplies — then face the climb."
+				},
+				{
+					"id": "fortLaramieHunt",
+					"type": "button",
+					"name": "Go hunting",
+					"rect": [
+						12,
+						148,
+						150,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "ammo >= 1",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "1",
+										"var": "ammo"
+									},
+									{
+										"do": "add",
+										"value": "110",
+										"var": "food"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You spend a box of ammunition and bring back about 110 lbs of meat.",
+										"buttons": [
+											"Good eating"
+										]
+									},
+									{
+										"do": "if",
+										"condition": "health >= 80",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Good\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "health >= 55",
+												"then": [
+													{
+														"do": "put",
+														"value": "\"Fair\"",
+														"var": "healthWord"
+													}
+												],
+												"else": [
+													{
+														"do": "if",
+														"condition": "health >= 30",
+														"then": [
+															{
+																"do": "put",
+																"value": "\"Poor\"",
+																"var": "healthWord"
+															}
+														],
+														"else": [
+															{
+																"do": "put",
+																"value": "\"Very Poor\"",
+																"var": "healthWord"
+															}
+														]
+													}
+												]
+											}
+										]
+									},
+									{
+										"do": "put",
+										"field": "sbInfo",
+										"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+									},
+									{
+										"do": "put",
+										"field": "sbSupplies",
+										"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You are out of ammunition — nothing to hunt with.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "fortLaramieRest",
+					"type": "button",
+					"name": "Rest a few days",
+					"rect": [
+						176,
+						148,
+						150,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "add",
+								"value": "12",
+								"var": "health"
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "4",
+								"var": "day"
+							},
+							{
+								"do": "subtract",
+								"value": "people * 4",
+								"var": "food"
+							},
+							{
+								"do": "answer",
+								"message": "You make camp and rest. The party recovers some strength.",
+								"buttons": [
+									"Ready"
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health >= 80",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Good\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 55",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Fair\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "health >= 30",
+												"then": [
+													{
+														"do": "put",
+														"value": "\"Poor\"",
+														"var": "healthWord"
+													}
+												],
+												"else": [
+													{
+														"do": "put",
+														"value": "\"Very Poor\"",
+														"var": "healthWord"
+													}
+												]
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "put",
+								"field": "sbInfo",
+								"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+							},
+							{
+								"do": "put",
+								"field": "sbSupplies",
+								"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+							}
+						]
+					}
+				},
+				{
+					"id": "fortLaramieGo",
+					"type": "button",
+					"name": "Continue on the trail →",
+					"rect": [
+						12,
+						214,
+						250,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "200",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "independenceRock"
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "fortLaramieTrade",
+					"type": "button",
+					"name": "Trade with travelers",
+					"rect": [
+						340,
+						148,
+						160,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "food >= 120",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "120",
+										"var": "food"
+									},
+									{
+										"do": "add",
+										"value": "1",
+										"var": "parts"
+									},
+									{
+										"do": "answer",
+										"message": "A passing party trades you a spare wagon part for 120 lbs of food.",
+										"buttons": [
+											"Deal"
+										]
+									},
+									{
+										"do": "if",
+										"condition": "health >= 80",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Good\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "health >= 55",
+												"then": [
+													{
+														"do": "put",
+														"value": "\"Fair\"",
+														"var": "healthWord"
+													}
+												],
+												"else": [
+													{
+														"do": "if",
+														"condition": "health >= 30",
+														"then": [
+															{
+																"do": "put",
+																"value": "\"Poor\"",
+																"var": "healthWord"
+															}
+														],
+														"else": [
+															{
+																"do": "put",
+																"value": "\"Very Poor\"",
+																"var": "healthWord"
+															}
+														]
+													}
+												]
+											}
+										]
+									},
+									{
+										"do": "put",
+										"field": "sbInfo",
+										"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+									},
+									{
+										"do": "put",
+										"field": "sbSupplies",
+										"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+									}
+								],
+								"else": [
+									{
+										"do": "answer",
+										"message": "The traders shrug — you have nothing they need right now.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "independenceRock",
+			"name": "Independence Rock",
+			"background": "trail",
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "if",
+						"condition": "health >= 80",
+						"then": [
+							{
+								"do": "put",
+								"value": "\"Good\"",
+								"var": "healthWord"
+							}
+						],
+						"else": [
+							{
+								"do": "if",
+								"condition": "health >= 55",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Fair\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 30",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Poor\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "\"Very Poor\"",
+												"var": "healthWord"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"do": "put",
+						"field": "sbInfo",
+						"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+					},
+					{
+						"do": "put",
+						"field": "sbSupplies",
+						"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+					}
+				]
+			},
+			"parts": [
+				{
+					"id": "irT",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "Independence Rock",
+					"style": {
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "irB",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						42,
+						488,
+						150
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "Pioneers aimed to reach Independence Rock by the Fourth of July — if you were here by Independence Day, you were on schedule to clear the mountains before the snows.\n\nThe great granite dome is covered in the painted and carved names of thousands who passed before you. Ahead: the gentle climb to South Pass, the gateway through the Continental Divide."
+				},
+				{
+					"id": "irGo",
+					"type": "button",
+					"name": "Continue to South Pass →",
+					"rect": [
+						12,
+						214,
+						250,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "190",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "southPass"
+									}
+								]
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "southPass",
+			"name": "South Pass",
+			"background": "trail",
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "if",
+						"condition": "health >= 80",
+						"then": [
+							{
+								"do": "put",
+								"value": "\"Good\"",
+								"var": "healthWord"
+							}
+						],
+						"else": [
+							{
+								"do": "if",
+								"condition": "health >= 55",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Fair\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 30",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Poor\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "\"Very Poor\"",
+												"var": "healthWord"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"do": "put",
+						"field": "sbInfo",
+						"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+					},
+					{
+						"do": "put",
+						"field": "sbSupplies",
+						"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+					}
+				]
+			},
+			"parts": [
+				{
+					"id": "spT",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "South Pass & the Parting of the Ways",
+					"style": {
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "spB",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						42,
+						488,
+						110
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "You cross the Continental Divide at South Pass — so broad and gentle you can barely tell you've reached the top of the Rockies. Soon the trail forks.\n\nThe Sublette Cutoff runs straight west: it saves days, but crosses fifty waterless miles of desert. The longer road south by Fort Bridger is slower but safer, with a chance to resupply."
+				},
+				{
+					"id": "spCut",
+					"type": "button",
+					"name": "Sublette Cutoff (short, dry)",
+					"rect": [
+						12,
+						162,
+						230,
+						28
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "subtract",
+								"value": "8",
+								"var": "health"
+							},
+							{
+								"do": "subtract",
+								"value": "people * 3",
+								"var": "food"
+							},
+							{
+								"do": "answer",
+								"message": "You strike out across the dry cutoff. It is hard on the party and the oxen, but you save many miles.",
+								"buttons": [
+									"Push on"
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "230",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "snakeRiver"
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "spBridger",
+					"type": "button",
+					"name": "Fort Bridger (long, safe)",
+					"rect": [
+						258,
+						162,
+						230,
+						28
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "add",
+								"value": "6",
+								"var": "day"
+							},
+							{
+								"do": "if",
+								"condition": "food >= 100",
+								"then": [
+									{
+										"do": "answer",
+										"message": "You detour to Fort Bridger. Jim Bridger himself trades you fresh supplies, and the party rests in safety.",
+										"buttons": [
+											"Restock"
+										]
+									},
+									{
+										"do": "subtract",
+										"value": "100",
+										"var": "food"
+									},
+									{
+										"do": "add",
+										"value": "1",
+										"var": "parts"
+									},
+									{
+										"do": "add",
+										"value": "6",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "answer",
+										"message": "You detour to Fort Bridger. The safer road costs you time, but the party stays whole.",
+										"buttons": [
+											"Onward"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "300",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "snakeRiver"
+									}
+								]
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "snakeRiver",
+			"name": "Snake River",
+			"background": "trail",
+			"parts": [
+				{
+					"id": "snakeRiverT",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "The Snake River Crossing",
+					"style": {
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "snakeRiverB",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						42,
+						488,
+						90
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "You reach the The Snake River Crossing. The Snake River runs cold, fast and deep through a rocky canyon — one of the most feared crossings on the whole trail.\n\nHow will you get the wagon across?"
+				},
+				{
+					"id": "snakeRiverFord",
+					"type": "button",
+					"name": "Ford the river",
+					"rect": [
+						12,
+						142,
+						150,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "river <= 3",
+								"then": [
+									{
+										"do": "answer",
+										"message": "The water is low and slow. You ford the river without trouble.",
+										"buttons": [
+											"Good"
+										]
+									}
+								],
+								"else": [
+									{
+										"do": "subtract",
+										"value": "120",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "10",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The current is deep and swift! The wagon nearly tips and supplies wash downstream.",
+										"buttons": [
+											"Disaster"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "300",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "blueMountains"
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "snakeRiverCaulk",
+					"type": "button",
+					"name": "Caulk & float",
+					"rect": [
+						176,
+						142,
+						150,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "river <= 4",
+								"then": [
+									{
+										"do": "answer",
+										"message": "You seal the wagon bed with pitch and float across smoothly.",
+										"buttons": [
+											"Nice"
+										]
+									}
+								],
+								"else": [
+									{
+										"do": "subtract",
+										"value": "60",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "5",
+										"var": "health"
+									},
+									{
+										"do": "answer",
+										"message": "Water seeps in and some food spoils, but you reach the far bank.",
+										"buttons": [
+											"Phew"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "300",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "blueMountains"
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "snakeRiverFerry",
+					"type": "button",
+					"name": "Take the ferry ($20)",
+					"rect": [
+						340,
+						142,
+						160,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "money >= 20",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "20",
+										"var": "money"
+									},
+									{
+										"do": "add",
+										"value": "5",
+										"var": "day"
+									},
+									{
+										"do": "answer",
+										"message": "You pay the ferryman $20. Safe and dry — though you wait a few days for your turn.",
+										"buttons": [
+											"Worth it"
+										]
+									},
+									{
+										"do": "if",
+										"condition": "ration = \"Filling\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 10",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "ration = \"Meager\"",
+												"then": [
+													{
+														"do": "put",
+														"value": "people * 7",
+														"var": "foodUse"
+													}
+												],
+												"else": [
+													{
+														"do": "put",
+														"value": "people * 4",
+														"var": "foodUse"
+													}
+												]
+											}
+										]
+									},
+									{
+										"do": "if",
+										"condition": "pace = \"Grueling\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 2",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "8",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "8",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "pace = \"Strenuous\"",
+												"then": [
+													{
+														"do": "subtract",
+														"value": "people * 1",
+														"var": "foodUse"
+													},
+													{
+														"do": "add",
+														"value": "11",
+														"var": "day"
+													},
+													{
+														"do": "subtract",
+														"value": "4",
+														"var": "health"
+													}
+												],
+												"else": [
+													{
+														"do": "add",
+														"value": "14",
+														"var": "day"
+													}
+												]
+											}
+										]
+									},
+									{
+										"do": "if",
+										"condition": "ration = \"Filling\"",
+										"then": [
+											{
+												"do": "add",
+												"value": "3",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "ration = \"Bare only\"",
+												"then": [
+													{
+														"do": "subtract",
+														"value": "5",
+														"var": "health"
+													}
+												],
+												"else": []
+											}
+										]
+									},
+									{
+										"do": "subtract",
+										"value": "foodUse",
+										"var": "food"
+									},
+									{
+										"do": "if",
+										"condition": "food < 0",
+										"then": [
+											{
+												"do": "put",
+												"value": "0",
+												"var": "food"
+											},
+											{
+												"do": "subtract",
+												"value": "18",
+												"var": "health"
+											},
+											{
+												"do": "beep"
+											},
+											{
+												"do": "answer",
+												"message": "The food is gone. Your party goes hungry and grows weak.",
+												"buttons": [
+													"On we go"
+												]
+											}
+										]
+									},
+									{
+										"do": "if",
+										"condition": "health > 100",
+										"then": [
+											{
+												"do": "put",
+												"value": "100",
+												"var": "health"
+											}
+										]
+									},
+									{
+										"do": "add",
+										"value": "300",
+										"var": "miles"
+									},
+									{
+										"do": "if",
+										"condition": "health <= 0 or people <= 0",
+										"then": [
+											{
+												"do": "put",
+												"value": "0",
+												"var": "health"
+											},
+											{
+												"do": "go",
+												"to": "died"
+											}
+										],
+										"else": [
+											{
+												"do": "visual",
+												"effect": "wipeLeft"
+											},
+											{
+												"do": "go",
+												"to": "blueMountains"
+											}
+										]
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You can't afford the $20 ferry fee.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "snakeRiverWait",
+					"type": "button",
+					"name": "Wait for better conditions",
+					"rect": [
+						12,
+						178,
+						250,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "add",
+								"value": "6",
+								"var": "day"
+							},
+							{
+								"do": "subtract",
+								"value": "people * 3",
+								"var": "food"
+							},
+							{
+								"do": "put",
+								"value": "2",
+								"var": "river"
+							},
+							{
+								"do": "answer",
+								"message": "You make camp and wait. After several days the river drops, and you ford it safely.",
+								"buttons": [
+									"Onward"
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "300",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "blueMountains"
+									}
+								]
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "blueMountains",
+			"name": "Blue Mountains",
+			"background": "trail",
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "if",
+						"condition": "clothes < people",
+						"then": [
+							{
+								"do": "put",
+								"value": "(people - clothes) * 3",
+								"var": "coldHit"
+							},
+							{
+								"do": "subtract",
+								"value": "coldHit",
+								"var": "health"
+							},
+							{
+								"do": "beep"
+							},
+							{
+								"do": "answer",
+								"message": "Early snow blankets the Blue Mountains. Without enough warm clothing, the party suffers badly in the cold.",
+								"buttons": [
+									"Brrr"
+								]
+							}
+						],
+						"else": [
+							{
+								"do": "answer",
+								"message": "Early snow dusts the Blue Mountains, but your party is well clothed and pushes through the passes.",
+								"buttons": [
+									"Onward"
+								]
+							}
+						]
+					},
+					{
+						"do": "if",
+						"condition": "health >= 80",
+						"then": [
+							{
+								"do": "put",
+								"value": "\"Good\"",
+								"var": "healthWord"
+							}
+						],
+						"else": [
+							{
+								"do": "if",
+								"condition": "health >= 55",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Fair\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 30",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Poor\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "\"Very Poor\"",
+												"var": "healthWord"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"do": "put",
+						"field": "sbInfo",
+						"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+					},
+					{
+						"do": "put",
+						"field": "sbSupplies",
+						"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+					}
+				]
+			},
+			"parts": [
+				{
+					"id": "bmT",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "The Blue Mountains",
+					"style": {
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "bmB",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						42,
+						488,
+						150
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "The forested Blue Mountains are the last great climb before the Columbia. The air turns thin and cold, and the timbered slopes are steep and slow going for the oxen.\n\nOne final stretch remains: the descent to The Dalles, and the last decision of the journey."
+				},
+				{
+					"id": "bmGo",
+					"type": "button",
+					"name": "Descend to The Dalles →",
+					"rect": [
+						12,
+						214,
+						250,
+						26
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "220",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "theDalles"
+									}
+								]
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "theDalles",
+			"name": "The Dalles",
+			"background": "trail",
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "if",
+						"condition": "health >= 80",
+						"then": [
+							{
+								"do": "put",
+								"value": "\"Good\"",
+								"var": "healthWord"
+							}
+						],
+						"else": [
+							{
+								"do": "if",
+								"condition": "health >= 55",
+								"then": [
+									{
+										"do": "put",
+										"value": "\"Fair\"",
+										"var": "healthWord"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 30",
+										"then": [
+											{
+												"do": "put",
+												"value": "\"Poor\"",
+												"var": "healthWord"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "\"Very Poor\"",
+												"var": "healthWord"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"do": "put",
+						"field": "sbInfo",
+						"value": "\"Day \" & day & \"     \" & miles & \" miles traveled     Health: \" & healthWord"
+					},
+					{
+						"do": "put",
+						"field": "sbSupplies",
+						"value": "\"Food \" & food & \" lbs     Oxen \" & oxen & \"     People \" & people & \"     $\" & money & \"     \" & pace & \" / \" & ration"
+					}
+				]
+			},
+			"parts": [
+				{
+					"id": "tdT",
+					"type": "label",
+					"rect": [
+						12,
+						12,
+						488,
+						22
+					],
+					"content": "The Dalles — the last choice",
+					"style": {
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "tdB",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						12,
+						42,
+						488,
+						110
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "You reach The Dalles on the Columbia River. The Willamette Valley is close now, but the Cascade Mountains block the way. There are two ways down.\n\nYou can float the wagon down the wild Columbia on a raft — fast, free, and dangerous. Or pay the toll on the new Barlow Road around Mount Hood — slower and costly, but far safer."
+				},
+				{
+					"id": "tdRaft",
+					"type": "button",
+					"name": "Float the Columbia (free, risky)",
+					"rect": [
+						12,
+						162,
+						240,
+						28
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "health >= 50 and parts >= 1",
+								"then": [
+									{
+										"do": "answer",
+										"message": "Steady hands and a sound wagon see you through the rapids of the Columbia gorge.",
+										"buttons": [
+											"We made it"
+										]
+									}
+								],
+								"else": [
+									{
+										"do": "subtract",
+										"value": "100",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "15",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The rapids catch the raft! You lose supplies to the river and the party is battered and soaked.",
+										"buttons": [
+											"Barely"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "put",
+										"value": "people * 10",
+										"var": "foodUse"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Meager\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 7",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "people * 4",
+												"var": "foodUse"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "pace = \"Grueling\"",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "people * 2",
+										"var": "foodUse"
+									},
+									{
+										"do": "add",
+										"value": "8",
+										"var": "day"
+									},
+									{
+										"do": "subtract",
+										"value": "8",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "pace = \"Strenuous\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 1",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "11",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "4",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "add",
+												"value": "14",
+												"var": "day"
+											}
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "ration = \"Filling\"",
+								"then": [
+									{
+										"do": "add",
+										"value": "3",
+										"var": "health"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "ration = \"Bare only\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "5",
+												"var": "health"
+											}
+										],
+										"else": []
+									}
+								]
+							},
+							{
+								"do": "subtract",
+								"value": "foodUse",
+								"var": "food"
+							},
+							{
+								"do": "if",
+								"condition": "food < 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "food"
+									},
+									{
+										"do": "subtract",
+										"value": "18",
+										"var": "health"
+									},
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "The food is gone. Your party goes hungry and grows weak.",
+										"buttons": [
+											"On we go"
+										]
+									}
+								]
+							},
+							{
+								"do": "if",
+								"condition": "health > 100",
+								"then": [
+									{
+										"do": "put",
+										"value": "100",
+										"var": "health"
+									}
+								]
+							},
+							{
+								"do": "add",
+								"value": "100",
+								"var": "miles"
+							},
+							{
+								"do": "if",
+								"condition": "health <= 0 or people <= 0",
+								"then": [
+									{
+										"do": "put",
+										"value": "0",
+										"var": "health"
+									},
+									{
+										"do": "go",
+										"to": "died"
+									}
+								],
+								"else": [
+									{
+										"do": "visual",
+										"effect": "wipeLeft"
+									},
+									{
+										"do": "go",
+										"to": "arrive"
+									}
+								]
+							}
+						]
+					}
+				},
+				{
+					"id": "tdBarlow",
+					"type": "button",
+					"name": "Barlow Toll Road ($30)",
+					"rect": [
+						270,
+						162,
+						220,
+						28
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "if",
+								"condition": "money >= 30",
+								"then": [
+									{
+										"do": "subtract",
+										"value": "30",
+										"var": "money"
+									},
+									{
+										"do": "add",
+										"value": "6",
+										"var": "day"
+									},
+									{
+										"do": "answer",
+										"message": "You pay the $30 toll and take the mountain road around Mount Hood — long, but safe.",
+										"buttons": [
+											"Worth it"
+										]
+									},
+									{
+										"do": "if",
+										"condition": "ration = \"Filling\"",
+										"then": [
+											{
+												"do": "put",
+												"value": "people * 10",
+												"var": "foodUse"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "ration = \"Meager\"",
+												"then": [
+													{
+														"do": "put",
+														"value": "people * 7",
+														"var": "foodUse"
+													}
+												],
+												"else": [
+													{
+														"do": "put",
+														"value": "people * 4",
+														"var": "foodUse"
+													}
+												]
+											}
+										]
+									},
+									{
+										"do": "if",
+										"condition": "pace = \"Grueling\"",
+										"then": [
+											{
+												"do": "subtract",
+												"value": "people * 2",
+												"var": "foodUse"
+											},
+											{
+												"do": "add",
+												"value": "8",
+												"var": "day"
+											},
+											{
+												"do": "subtract",
+												"value": "8",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "pace = \"Strenuous\"",
+												"then": [
+													{
+														"do": "subtract",
+														"value": "people * 1",
+														"var": "foodUse"
+													},
+													{
+														"do": "add",
+														"value": "11",
+														"var": "day"
+													},
+													{
+														"do": "subtract",
+														"value": "4",
+														"var": "health"
+													}
+												],
+												"else": [
+													{
+														"do": "add",
+														"value": "14",
+														"var": "day"
+													}
+												]
+											}
+										]
+									},
+									{
+										"do": "if",
+										"condition": "ration = \"Filling\"",
+										"then": [
+											{
+												"do": "add",
+												"value": "3",
+												"var": "health"
+											}
+										],
+										"else": [
+											{
+												"do": "if",
+												"condition": "ration = \"Bare only\"",
+												"then": [
+													{
+														"do": "subtract",
+														"value": "5",
+														"var": "health"
+													}
+												],
+												"else": []
+											}
+										]
+									},
+									{
+										"do": "subtract",
+										"value": "foodUse",
+										"var": "food"
+									},
+									{
+										"do": "if",
+										"condition": "food < 0",
+										"then": [
+											{
+												"do": "put",
+												"value": "0",
+												"var": "food"
+											},
+											{
+												"do": "subtract",
+												"value": "18",
+												"var": "health"
+											},
+											{
+												"do": "beep"
+											},
+											{
+												"do": "answer",
+												"message": "The food is gone. Your party goes hungry and grows weak.",
+												"buttons": [
+													"On we go"
+												]
+											}
+										]
+									},
+									{
+										"do": "if",
+										"condition": "health > 100",
+										"then": [
+											{
+												"do": "put",
+												"value": "100",
+												"var": "health"
+											}
+										]
+									},
+									{
+										"do": "add",
+										"value": "100",
+										"var": "miles"
+									},
+									{
+										"do": "if",
+										"condition": "health <= 0 or people <= 0",
+										"then": [
+											{
+												"do": "put",
+												"value": "0",
+												"var": "health"
+											},
+											{
+												"do": "go",
+												"to": "died"
+											}
+										],
+										"else": [
+											{
+												"do": "visual",
+												"effect": "wipeLeft"
+											},
+											{
+												"do": "go",
+												"to": "arrive"
+											}
+										]
+									}
+								],
+								"else": [
+									{
+										"do": "beep"
+									},
+									{
+										"do": "answer",
+										"message": "You can't afford the $30 toll. The only way left is to float the river.",
+										"buttons": [
+											"OK"
+										]
+									}
+								]
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "arrive",
+			"name": "You Reached Oregon!",
+			"background": "plain",
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "if",
+						"condition": "health >= 80",
+						"then": [
+							{
+								"do": "put",
+								"value": "500",
+								"var": "hb"
+							}
+						],
+						"else": [
+							{
+								"do": "if",
+								"condition": "health >= 55",
+								"then": [
+									{
+										"do": "put",
+										"value": "400",
+										"var": "hb"
+									}
+								],
+								"else": [
+									{
+										"do": "if",
+										"condition": "health >= 30",
+										"then": [
+											{
+												"do": "put",
+												"value": "300",
+												"var": "hb"
+											}
+										],
+										"else": [
+											{
+												"do": "put",
+												"value": "200",
+												"var": "hb"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"do": "put",
+						"value": "people * hb + oxen * 50 + parts * 50 + clothes * 25 + food + money",
+						"var": "score"
+					},
+					{
+						"do": "multiply",
+						"value": "mult",
+						"var": "score"
+					},
+					{
+						"do": "put",
+						"field": "arriveScore",
+						"value": "\"Final score:  \" & score & \" points\""
+					},
+					{
+						"do": "put",
+						"field": "arriveSummary",
+						"value": "\"You arrived as a \" & prof & \" after \" & day & \" days, with \" & people & \" of your 5 pioneers still alive.\""
+					}
+				]
+			},
+			"parts": [
+				{
+					"id": "arT",
+					"type": "label",
+					"rect": [
+						12,
+						30,
+						488,
+						28
+					],
+					"content": "You have reached Oregon!",
+					"style": {
+						"align": "center",
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "arBody",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						56,
+						70,
+						400,
+						120
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "The wagon crests the last rise and there it is — the green, river-fed farmland of the Willamette Valley spreading out below. After 2,000 miles of prairie, desert, river and mountain, your family has made it to Oregon.\n\nYou stake your claim, and a new life begins."
+				},
+				{
+					"id": "arriveSummary",
+					"type": "label",
+					"rect": [
+						12,
+						200,
+						488,
+						20
+					],
+					"content": "",
+					"style": {
+						"align": "center"
+					}
+				},
+				{
+					"id": "arriveScore",
+					"type": "label",
+					"rect": [
+						12,
+						226,
+						488,
+						22
+					],
+					"content": "",
+					"style": {
+						"align": "center",
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "arAgain",
+					"type": "button",
+					"name": "Travel Again",
+					"rect": [
+						196,
+						288,
+						120,
+						28
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "visual",
+								"effect": "dissolve"
+							},
+							{
+								"do": "go",
+								"to": "title"
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "died",
+			"name": "You Have Died",
+			"background": "plain",
+			"script": {
+				"onOpenCard": [
+					{
+						"do": "put",
+						"field": "diedSummary",
+						"value": "\"You made it \" & miles & \" miles in \" & day & \" days before the trail claimed your party.\""
+					}
+				]
+			},
+			"parts": [
+				{
+					"id": "dT",
+					"type": "label",
+					"rect": [
+						12,
+						40,
+						488,
+						28
+					],
+					"content": "You have died on the trail.",
+					"style": {
+						"align": "center",
+						"fontSize": "large"
+					}
+				},
+				{
+					"id": "dBody",
+					"type": "field",
+					"locked": true,
+					"rect": [
+						56,
+						84,
+						400,
+						120
+					],
+					"options": {
+						"multiline": true
+					},
+					"content": "The hardships of the trail were too great. Sickness, hunger and hard miles have ended your journey short of Oregon.\n\nYou would not be the first — of the thousands who set out on the Oregon Trail, many never arrived. Rest here, and perhaps another family will fare better."
+				},
+				{
+					"id": "diedSummary",
+					"type": "label",
+					"rect": [
+						12,
+						214,
+						488,
+						20
+					],
+					"content": "",
+					"style": {
+						"align": "center"
+					}
+				},
+				{
+					"id": "dAgain",
+					"type": "button",
+					"name": "Try Again",
+					"rect": [
+						206,
+						288,
+						100,
+						28
+					],
+					"script": {
+						"onMouseUp": [
+							{
+								"do": "visual",
+								"effect": "dissolve"
+							},
+							{
+								"do": "go",
+								"to": "title"
+							}
+						]
+					}
+				}
+			]
+		}
+	]
+}
