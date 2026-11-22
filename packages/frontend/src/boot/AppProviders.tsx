@@ -7,10 +7,22 @@
 // after ClassicyAppManagerProvider.
 //
 // Classicy 3 draws nothing until an Appearance Package registers (it shows its
-// "No Appearance Package is loaded" screen instead), so the Platinum package
-// is imported first, before anything renders. Importing @classicy/classicy
+// "No Appearance Package is loaded" screen instead), so the Appearance Packages
+// are imported first, before anything renders. Importing @classicy/classicy
 // injects its own stylesheet, so there is no CSS import here any more.
+//
+// Both looks are registered, and Classicy's own Appearance Manager control
+// panel switches between them (its Packages tab calls `changePackage`) — this
+// app writes no switching code of its own. Platinum stays what a fresh desktop
+// draws: the core's CLASSICY_DEFAULT_APPEARANCE_PACKAGE_ID is "platinum", and
+// every unregistered or stale stored id resolves back to it, so registering
+// System 7 adds a choice without moving the default.
+//
+// Import order does not pick the default, but keep Platinum first anyway: it is
+// the product's own look, and the fallback when a package is missing is "the
+// default, else the first registered".
 import "@classicy/appearance-platinum";
+import "@classicy/appearance-system7";
 import type { ReactNode } from "react";
 import { ClassicyAppManagerProvider, registerClassicyFileSystemAdapter } from "@classicy/classicy";
 import { DefaultFileSystem } from "../data/DefaultFileSystem";
