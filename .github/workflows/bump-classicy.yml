@@ -8,8 +8,10 @@ name: Bump classicy
 # the core, `@classicy/classicy` (the unscoped `classicy` package stopped at
 # 2.x), and the two looks this app loads, `@classicy/appearance-platinum` and
 # `@classicy/appearance-system7`, whose peer ranges are `^<core version>`.
-# npm publishes them one after another and its metadata lags, so the "Wait for
-# npm" step below polls until all three serve the target version before
+# The three publish one after another (the core last: during 3.7.0, Platinum
+# and System 7 were `latest` while the core was still 3.6.0), so a dispatch can
+# run mid-publish. The "Wait for npm" step below polls until all three agree
+# (and serve the dispatched version) before
 # `pnpm bump:classicy` updates them in one command, and the "Check lockstep"
 # step refuses a bump that leaves any of them (installed version or written
 # range) on a different version.
@@ -112,8 +114,10 @@ jobs:
         env:
           TAG: ${{ github.event.client_payload.tag }}
         run: |
-          # The three packages publish seconds apart and npm's metadata lags, so
-          # a dispatch can arrive while one is still missing. `pnpm bump:classicy`
+          # The three packages publish one after another (the core last), so a
+          # dispatch can run mid-publish with one still missing. Every package
+          # `bump:classicy` names must also be in pnpm-workspace.yaml's
+          # minimumReleaseAgeExclude, or pnpm's release-age gate holds it back. `pnpm bump:classicy`
           # uses `--latest`, so the real requirement is that the three
           # `dist-tags.latest` values agree (a newer release may already be
           # latest by the time an older dispatch runs, which is fine). When a
