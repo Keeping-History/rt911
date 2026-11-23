@@ -164,8 +164,9 @@ describe("LanePreview", () => {
 		const recordingStart = Date.UTC(2001, 8, 11, 12, 5);
 		const expectedLeft = ((recordingStart - FULL_BOUNDS.startMs) / TRACK_MS) * 100;
 		const expectedWidth = (60_000 / TRACK_MS) * 100;
-		expect(parseFloat(slot.style.left)).toBeCloseTo(expectedLeft, 6);
-		expect(parseFloat(slot.style.width)).toBeCloseTo(expectedWidth, 6);
+		// jsdom 31's CSSOM serializes percentages to four decimals, so compare to 4 places.
+		expect(parseFloat(slot.style.left)).toBeCloseTo(expectedLeft, 4);
+		expect(parseFloat(slot.style.width)).toBeCloseTo(expectedWidth, 4);
 
 		// …and emphatically NOT the visible-span fractions the strip used to
 		// compute (5/30 and 1/30 of the half-hour window), which at this zoom
