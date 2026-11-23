@@ -113,41 +113,43 @@ jobs:
           TAG: ${{ github.event.client_payload.tag }}
         run: |
           # The three packages publish seconds apart and npm's metadata lags, so
-          # a dispatch can arrive while one is still missing. With a tag
-          # (e.g. v3.7.0) that version is the target; on a manual run the
-          # core's `latest` is. Wait until every package serves the target both
-          # as a version and as its `latest` dist-tag.
-          # Up to 10 minutes: 30 attempts, 20 s apart (overridable for local tests).
+          # a dispatch can arrive while one is still missing. `pnpm bump:classicy`
+          # uses `--latest`, so the real requirement is that the three
+          # `dist-tags.latest` values agree (a newer release may already be
+          # latest by the time an older dispatch runs, which is fine). When a
+          # tag was dispatched (e.g. v3.7.0), every package must also serve that
+          # version. Up to 10 minutes: 30 attempts, 20 s apart (overridable for
+          # local tests).
           WAIT_ATTEMPTS="${WAIT_ATTEMPTS:-30}"
           WAIT_INTERVAL="${WAIT_INTERVAL:-20}"
           pkgs="@classicy/classicy @classicy/appearance-platinum @classicy/appearance-system7"
-          if [ -n "$TAG" ]; then
-            target="${TAG#v}"
-          else
-            target=$(npm view --prefer-online @classicy/classicy dist-tags.latest)
-          fi
-          if [ -z "$target" ]; then
-            echo "::error::Could not determine the target Classicy version"
-            exit 1
-          fi
-          behind=""
+          target="${TAG#v}"
+          detail=""
           for attempt in $(seq 1 "$WAIT_ATTEMPTS"); do
-            behind=""
+            detail=""
+            common=""
+            agree=1
+            served=1
             for pkg in $pkgs; do
-              have=$(npm view --prefer-online "$pkg@$target" version 2>/dev/null || true)
               latest=$(npm view --prefer-online "$pkg" dist-tags.latest 2>/dev/null || true)
-              if [ "$have" != "$target" ] || [ "$latest" != "$target" ]; then
-                behind="${behind:+$behind, }$pkg (version '${have:-none}', latest '${latest:-none}')"
+              if [ -n "$target" ]; then
+                have=$(npm view --prefer-online "$pkg@$target" version 2>/dev/null || true)
+                if [ "$have" = "$target" ]; then serves="serves $target"; else serves="does not serve $target (not published yet, or npm unreachable)"; served=0; fi
+              else
+                serves="no target (manual run)"
               fi
+              detail="${detail:+$detail; }$pkg: latest '${latest:-none}', $serves"
+              if [ -z "$latest" ]; then agree=0; fi
+              if [ -z "$common" ]; then common="$latest"; elif [ "$latest" != "$common" ]; then agree=0; fi
             done
-            if [ -z "$behind" ]; then
-              echo "::notice::All three Classicy packages serve $target (attempt $attempt)"
+            if [ "$agree" = 1 ] && [ "$served" = 1 ]; then
+              echo "::notice::All three Classicy packages have latest $common${target:+ and serve $target}; the bump PR will carry $common (attempt $attempt)"
               exit 0
             fi
-            echo "::notice::Attempt $attempt/$WAIT_ATTEMPTS: waiting for $target; behind: $behind"
+            echo "::notice::Attempt $attempt/$WAIT_ATTEMPTS: waiting for one common latest${target:+ that serves $target}; $detail"
             if [ "$attempt" -lt "$WAIT_ATTEMPTS" ]; then sleep "$WAIT_INTERVAL"; fi
           done
-          echo "::error::Timed out waiting for npm to serve $target for all three Classicy packages; behind: $behind"
+          echo "::error::Timed out waiting for npm to serve one common latest${target:+ that serves $target} for all three Classicy packages; $detail"
           exit 1
 
       - name: Update Classicy (@classicy/classicy, @classicy/appearance-platinum and @classicy/appearance-system7)
