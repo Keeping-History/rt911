@@ -21,11 +21,17 @@ overrides:
 # pnpm 11 refuses any package published within minimumReleaseAge (24h by
 # default) — a supply-chain delay that is worth keeping. Two exemptions:
 #
-# Classicy (@classicy/classicy and @classicy/appearance-platinum, published
-# together) is bumped to "latest" by .husky/pre-commit on EVERY commit, so a
-# same-day publish would fail the hook for everyone until it aged out.
-# Excluding both is the difference between the gate protecting the tree and
-# the gate blocking it.
+# Classicy (@classicy/classicy, @classicy/appearance-platinum and
+# @classicy/appearance-system7, published together at one version) is bumped
+# to "latest" by .husky/pre-commit on EVERY commit. Without the exemption a
+# same-day release is gated twice over: the hook's `pnpm update --latest`
+# silently holds a package at its newest version older than the gate (leaving
+# the Appearance Packages at mixed versions, unsupported upstream), and a
+# `--frozen-lockfile` install (CI, the Docker build) of a lockfile that does
+# carry the release fails ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION until it ages
+# out. Excluding them is the difference between the gate protecting the tree
+# and the gate blocking it, so every package bump:classicy names must be
+# listed here.
 #
 # oxlint is exempt because it publishes 20 per-platform binding packages in
 # lockstep; without this, a lint upgrade lands as 20 hand-maintained
@@ -33,6 +39,7 @@ overrides:
 minimumReleaseAgeExclude:
   - '@classicy/classicy'
   - '@classicy/appearance-platinum'
+  - '@classicy/appearance-system7'
   - oxlint
   - '@oxlint/*'
 # pnpm 11 replaced onlyBuiltDependencies with this per-package map; the
