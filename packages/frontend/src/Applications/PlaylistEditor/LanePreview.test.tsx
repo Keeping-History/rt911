@@ -164,7 +164,7 @@ describe("LanePreview", () => {
 		const recordingStart = Date.UTC(2001, 8, 11, 12, 5);
 		const expectedLeft = ((recordingStart - FULL_BOUNDS.startMs) / TRACK_MS) * 100;
 		const expectedWidth = (60_000 / TRACK_MS) * 100;
-		// jsdom 31's CSSOM serializes percentages to four decimals, so compare to 4 places.
+		// jsdom 31 serializes numbers in CSS values to about six significant digits (25.0347%), so compare to four places.
 		expect(parseFloat(slot.style.left)).toBeCloseTo(expectedLeft, 4);
 		expect(parseFloat(slot.style.width)).toBeCloseTo(expectedWidth, 4);
 
