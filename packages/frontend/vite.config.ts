@@ -202,10 +202,14 @@ export default defineConfig({
 	// Classicy 3 ships its fonts and art as files in dist/assets/, referenced as
 	// `new URL("assets/…", import.meta.url)`. The dev server's dependency
 	// pre-bundle (node_modules/.vite/deps/) rewrites those URLs, so fonts and
-	// art would come back as the SPA fallback page: keep both packages out of
-	// it. A production build handles the URLs itself and needs no setting.
+	// art would come back as the SPA fallback page: keep all three packages (the
+	// core and both looks) out of it. A production build handles the URLs itself and needs no setting.
 	optimizeDeps: {
-		exclude: ["@classicy/classicy", "@classicy/appearance-platinum"],
+		exclude: [
+			"@classicy/classicy",
+			"@classicy/appearance-platinum",
+			"@classicy/appearance-system7",
+		],
 	},
 	css: {
 		preprocessorOptions: {

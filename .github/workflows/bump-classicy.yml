@@ -4,12 +4,17 @@ name: Bump classicy
 # packages/frontend/package.json's version ranges) and, if it actually changed,
 # land it on `main` so the deployed frontend picks it up.
 #
-# Classicy 3 ships as two npm packages released together at the same version:
+# Classicy 3 ships as three npm packages released together at the same version:
 # the core, `@classicy/classicy` (the unscoped `classicy` package stopped at
-# 2.x), and its Platinum look, `@classicy/appearance-platinum`, whose peer
-# range is `^<core version>`. `pnpm bump:classicy` updates both in one command,
-# and the "Check lockstep" step below refuses a bump that leaves them on
-# different versions (one published, the other not yet).
+# 2.x), and the two looks this app loads, `@classicy/appearance-platinum` and
+# `@classicy/appearance-system7`, whose peer ranges are `^<core version>`.
+# The three publish one after another (the core last: during 3.7.0, Platinum
+# and System 7 were `latest` while the core was still 3.6.0), so a dispatch can
+# run mid-publish. The "Wait for npm" step below polls until all three agree
+# (and serve the dispatched version) before
+# `pnpm bump:classicy` updates them in one command, and the "Check lockstep"
+# step refuses a bump that leaves any of them (installed version or written
+# range) on a different version.
 #
 # Why this exists: `.husky/pre-commit` auto-bumps Classicy on every human
 # commit — but between commits a fresh Classicy release won't reach production
@@ -105,20 +110,76 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Update Classicy (@classicy/classicy and @classicy/appearance-platinum)
+      - name: Wait for npm to serve one version for all three packages
+        env:
+          TAG: ${{ github.event.client_payload.tag }}
+        run: |
+          # The three packages publish one after another (the core last), so a
+          # dispatch can run mid-publish with one still missing. Every package
+          # `bump:classicy` names must also be in pnpm-workspace.yaml's
+          # minimumReleaseAgeExclude, or pnpm's release-age gate holds it back. `pnpm bump:classicy`
+          # uses `--latest`, so the real requirement is that the three
+          # `dist-tags.latest` values agree (a newer release may already be
+          # latest by the time an older dispatch runs, which is fine). When a
+          # tag was dispatched (e.g. v3.7.0), every package must also serve that
+          # version. Up to 10 minutes: 30 attempts, 20 s apart (overridable for
+          # local tests).
+          WAIT_ATTEMPTS="${WAIT_ATTEMPTS:-30}"
+          WAIT_INTERVAL="${WAIT_INTERVAL:-20}"
+          pkgs="@classicy/classicy @classicy/appearance-platinum @classicy/appearance-system7"
+          target="${TAG#v}"
+          detail=""
+          for attempt in $(seq 1 "$WAIT_ATTEMPTS"); do
+            detail=""
+            common=""
+            agree=1
+            served=1
+            for pkg in $pkgs; do
+              latest=$(npm view --prefer-online "$pkg" dist-tags.latest 2>/dev/null || true)
+              if [ -n "$target" ]; then
+                have=$(npm view --prefer-online "$pkg@$target" version 2>/dev/null || true)
+                if [ "$have" = "$target" ]; then serves="serves $target"; else serves="does not serve $target (not published yet, or npm unreachable)"; served=0; fi
+              else
+                serves="no target (manual run)"
+              fi
+              detail="${detail:+$detail; }$pkg: latest '${latest:-none}', $serves"
+              if [ -z "$latest" ]; then agree=0; fi
+              if [ -z "$common" ]; then common="$latest"; elif [ "$latest" != "$common" ]; then agree=0; fi
+            done
+            if [ "$agree" = 1 ] && [ "$served" = 1 ]; then
+              echo "::notice::All three Classicy packages have latest $common${target:+ and serve $target}; the bump PR will carry $common (attempt $attempt)"
+              exit 0
+            fi
+            echo "::notice::Attempt $attempt/$WAIT_ATTEMPTS: waiting for one common latest${target:+ that serves $target}; $detail"
+            if [ "$attempt" -lt "$WAIT_ATTEMPTS" ]; then sleep "$WAIT_INTERVAL"; fi
+          done
+          echo "::error::Timed out waiting for npm to serve one common latest${target:+ that serves $target} for all three Classicy packages; $detail"
+          exit 1
+
+      - name: Update Classicy (@classicy/classicy, @classicy/appearance-platinum and @classicy/appearance-system7)
         run: pnpm bump:classicy
 
       - name: Check lockstep
         working-directory: packages/frontend
         run: |
-          # Both packages publish at the same version from one release. If one
-          # landed on npm before the other, wait for the next dispatch rather
-          # than open a PR whose Platinum peer range misses its core.
-          core=$(node -p 'require("./node_modules/@classicy/classicy/package.json").version')
-          platinum=$(node -p 'require("./node_modules/@classicy/appearance-platinum/package.json").version')
-          echo "::notice::@classicy/classicy $core, @classicy/appearance-platinum $platinum"
-          if [ "$core" != "$platinum" ]; then
-            echo "::error::@classicy/classicy ($core) and @classicy/appearance-platinum ($platinum) differ; not opening a bump PR"
+          # All three packages publish at the same version from one release.
+          # Compare what is installed and what `--latest` wrote to package.json;
+          # if any differ, do not open a PR whose peer ranges miss their core.
+          out=$(node -e '
+            const names = ["@classicy/classicy", "@classicy/appearance-platinum", "@classicy/appearance-system7"];
+            const pkg = require("./package.json");
+            const rows = names.map((n) => ({
+              n,
+              installed: require("./node_modules/" + n + "/package.json").version,
+              range: (pkg.dependencies?.[n] ?? pkg.devDependencies?.[n] ?? "missing").replace(/^[\^~]/, ""),
+            }));
+            for (const r of rows) console.log(`${r.n}: installed ${r.installed}, range ${r.range}`);
+            const all = new Set(rows.flatMap((r) => [r.installed, r.range]));
+            process.exit(all.size === 1 ? 0 : 1);
+          ') && ok=1 || ok=0
+          echo "$out" | while IFS= read -r line; do echo "::notice::$line"; done
+          if [ "$ok" != 1 ]; then
+            echo "::error::The three Classicy packages are not in lockstep (installed versions and package.json ranges must all match); not opening a bump PR. $(echo "$out" | tr '\n' ';')"
             exit 1
           fi
 
@@ -128,7 +189,7 @@ jobs:
           TAG: ${{ github.event.client_payload.tag }}
         run: |
           # `pnpm update --latest` rewrites packages/frontend/package.json's
-          # ranges for both packages in addition to the lockfile — check (and
+          # ranges for all three packages in addition to the lockfile — check (and
           # stage) both files, or the bump PR would leave package.json stale
           # and the next non-frozen `pnpm install` would revert it.
           if git diff --quiet -- pnpm-lock.yaml packages/frontend/package.json; then
@@ -158,7 +219,7 @@ jobs:
             pr=$(gh pr create \
               --base main --head "$BRANCH" \
               --title "$title" \
-              --body "Automated Classicy bump: \`@classicy/classicy\` and \`@classicy/appearance-platinum\`, together.${TAG:+ New version: \`$TAG\`.}")
+              --body "Automated Classicy bump: \`@classicy/classicy\`, \`@classicy/appearance-platinum\` and \`@classicy/appearance-system7\`, together.${TAG:+ New version: \`$TAG\`.}")
           fi
 
           # Merge once the required checks pass; delete the branch afterwards.
