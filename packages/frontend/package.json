@@ -22,9 +22,9 @@
 		"codegen": "playwright codegen"
 	},
 	"dependencies": {
-		"@classicy/appearance-platinum": "^3.5.0",
-		"@classicy/appearance-system7": "^3.5.0",
-		"@classicy/classicy": "^3.5.0",
+		"@classicy/appearance-platinum": "^3.7.0",
+		"@classicy/appearance-system7": "^3.7.0",
+		"@classicy/classicy": "^3.7.0",
 		"@msgpack/msgpack": "^3.1.3",
 		"@openreplay/tracker": "^19.0.5",
 		"classnames": "^2.5.1",
