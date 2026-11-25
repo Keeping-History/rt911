@@ -20,7 +20,7 @@ jobs:
   auto-label:
     runs-on: ubuntu-latest
     steps:
-      - uses: prince-chrismc/label-merge-conflicts-action@21e6705eaa6aab66e4e486279389c8e3e4c465b7 # v3.0.4
+      - uses: prince-chrismc/label-merge-conflicts-action@058249efb9b6ec6ef2a84fd53002d4d0ccb34855 # v4.0.0
         with:
           conflict_label_name: "conflict"
           github_token: ${{ github.token }}
